@@ -16,6 +16,17 @@ The repository contains a portable skill, small offline heuristic demo, integrat
 
 The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery.
 
+### Apply (recommended — dashboard auto-starts)
+
+```bash
+# macOS/Linux
+./scripts/apply.sh
+# Windows PowerShell
+.\scripts\apply.ps1
+```
+
+This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and opens the savings dashboard. **Dropping `SKILL.md` alone does not auto-start the dashboard** — that requires the apply script (or opening `demo/dashboard.html` yourself).
+
 ### Short CLI snippets
 
 Run from the root of your target project; replace `/path/to/auto-model-router` with the clone location:
@@ -56,7 +67,8 @@ If you are running out of Cursor, Claude Code, or Codex usage, this project addr
 
 ```bash
 python3 demo/savings_estimator.py demo/sample_usage_log.json
-# Optional: open demo/dashboard.html and load the sample log or paste your own JSON.
+# Or run ./scripts/apply.sh (opens ~/.auto-model-router/demo/dashboard.html), then Load sample log.
+# Optional: open demo/dashboard.html from the repo and load the sample log or paste your own JSON.
 ```
 
 This is not live billing or token accounting: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. Percentages are estimates from the supplied local log, not promises or measured vendor savings. After confirmed runs, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`INSTALL.md`](INSTALL.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
@@ -148,6 +160,7 @@ LICENSE
 .gitignore
 SKILL.md                              # compatibility copy of the canonical skill
 skills/auto-model-router/SKILL.md     # canonical skill
+scripts/apply.sh / apply.ps1           # apply skill + open dashboard
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md

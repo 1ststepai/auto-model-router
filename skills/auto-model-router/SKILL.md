@@ -78,6 +78,18 @@ Minimum schema (one object per line):
 
 Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields include `suggested_tier`, `host`, and a non-sensitive `task_kind`. Do not log prompts, task text, code, secrets, customer data, or provider credentials by default. The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
 
+## On apply / first use
+
+SKILL.md cannot magically open a GUI when Cursor or Claude merely loads a skill — no host hook exists for that. Prefer the apply scripts (`scripts/apply.sh` / `scripts/apply.ps1`) so install copies the demo and opens the savings dashboard.
+
+When the user just installed the skill, says they applied it, or asks to apply / show the savings dashboard:
+
+1. Tell them the dashboard lives at `~/.auto-model-router/demo/dashboard.html` (Windows: `%USERPROFILE%\.auto-model-router\demo\dashboard.html`), or at `demo/dashboard.html` in this repo if they have not run apply yet.
+2. If the host allows a shell command, open it with the platform opener (`open` on macOS, `xdg-open` on Linux, `Start-Process` / `Invoke-Item` on Windows). If a shell is not allowed, give the path and ask them to open it locally.
+3. One-line sample: click **Load sample log** in the dashboard (or open `demo/sample_usage_log.json` / `~/.auto-model-router/demo/sample_usage_log.json`) to see illustrative estimates — not live vendor billing.
+
+Do not claim the skill auto-opened a browser just because it was loaded; only claim that after the apply script or an explicit open command succeeded.
+
 ## Honesty
 
 This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest → confirm/override → run the lightest sufficient option → escalate on failure**.

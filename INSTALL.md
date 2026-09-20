@@ -2,6 +2,21 @@
 
 This repository is an agent behavior skill. Install the skill and, when you want it to run on every request, add the optional host rule or instruction file described below.
 
+## Recommended: apply script (dashboard auto-starts)
+
+**"Apply" means run the script below** — not only dropping `SKILL.md` into a skills folder. Cursor/Claude loading a skill cannot open a GUI; the apply scripts copy the skill, install the demo under `~/.auto-model-router/demo` (Windows: `%USERPROFILE%\.auto-model-router\demo`), create an empty `logs/usage.jsonl`, and **open `dashboard.html` in your default browser**.
+
+From a clone of this repository:
+
+```bash
+# macOS/Linux
+./scripts/apply.sh
+# Windows PowerShell
+.\scripts\apply.ps1
+```
+
+After it opens, click **Load sample log** for illustrative estimates (not live Cursor/Claude/Codex billing). Manual `cp` of `SKILL.md` alone does **not** auto-start the dashboard.
+
 ## What this supports
 
 - **Cursor Agent**, using project or user skills and optional Cursor rules.
@@ -17,7 +32,7 @@ If you are running out of usage or burning tokens, this targets **model overkill
 
 ## Quick start (about 60 seconds)
 
-Download or clone this repository, then run the commands from the **root of your target project**. Replace `/path/to/auto-model-router` with the location of this clone. If the target project is this repository itself, the shorter relative source paths shown in the host sections also work. Project installs are the best choice for teams and cloud/background agents because the files can be committed:
+**Preferred:** clone this repository and run `./scripts/apply.sh` (macOS/Linux) or `.\scripts\apply.ps1` (Windows) so skills install **and** the savings dashboard opens. For project-only installs without the dashboard auto-start, download or clone, then run the commands below from the **root of your target project**. Replace `/path/to/auto-model-router` with the location of this clone. If the target project is this repository itself, the shorter relative source paths shown in the host sections also work. Project installs are the best choice for teams and cloud/background agents because the files can be committed:
 
 ```bash
 # Cursor
@@ -219,7 +234,7 @@ The repository includes an honest, offline MVP for estimating relative costs fro
 python3 demo/savings_estimator.py demo/sample_usage_log.json
 ```
 
-You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, open [`demo/dashboard.html`](demo/dashboard.html), click **Load sample log**, or paste your own JSON. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
+You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log**, or paste your own JSON. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
 
 ## Any other agent
 
