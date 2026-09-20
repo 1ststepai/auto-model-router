@@ -19,13 +19,29 @@ The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-r
 ### Apply (recommended — dashboard auto-starts)
 
 ```bash
-# macOS/Linux
+# macOS/Linux — default: open dashboard
 ./scripts/apply.sh
+./scripts/apply.sh --no-open   # install only; persist preference
+./scripts/apply.sh --open      # force open; persist preference
+
 # Windows PowerShell
 .\scripts\apply.ps1
+.\scripts\apply.ps1 -NoOpen
+.\scripts\apply.ps1 -Open
 ```
 
-This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and opens the savings dashboard. **Dropping `SKILL.md` alone does not auto-start the dashboard** — that requires the apply script (or opening `demo/dashboard.html` yourself).
+This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
+
+**Optional weekly review** (local usage log only — not vendor billing):
+
+```bash
+./scripts/apply.sh --enable-weekly-review
+python3 ~/.auto-model-router/weekly_review.py --force
+# Explicit opt-in schedule only — never installed silently:
+./scripts/apply.sh --install-schedule   # uninstall: --uninstall-schedule
+```
+
+**Dropping `SKILL.md` alone does not auto-start the dashboard** — that requires the apply script (or opening `demo/dashboard.html` yourself).
 
 ### Short CLI snippets
 
@@ -160,7 +176,8 @@ LICENSE
 .gitignore
 SKILL.md                              # compatibility copy of the canonical skill
 skills/auto-model-router/SKILL.md     # canonical skill
-scripts/apply.sh / apply.ps1           # apply skill + open dashboard
+scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
+scripts/weekly_review.py               # opt-in local usage-log weekly summary
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md

@@ -4,18 +4,70 @@ This repository is an agent behavior skill. Install the skill and, when you want
 
 ## Recommended: apply script (dashboard auto-starts)
 
-**"Apply" means run the script below** — not only dropping `SKILL.md` into a skills folder. Cursor/Claude loading a skill cannot open a GUI; the apply scripts copy the skill, install the demo under `~/.auto-model-router/demo` (Windows: `%USERPROFILE%\.auto-model-router\demo`), create an empty `logs/usage.jsonl`, and **open `dashboard.html` in your default browser**.
+**"Apply" means run the script below** — not only dropping `SKILL.md` into a skills folder. Cursor/Claude loading a skill cannot open a GUI; the apply scripts copy the skill, install the demo under `~/.auto-model-router/demo` (Windows: `%USERPROFILE%\.auto-model-router\demo`), create an empty `logs/usage.jsonl`, and by default **open `dashboard.html` in your default browser**.
 
 From a clone of this repository:
 
 ```bash
-# macOS/Linux
+# macOS/Linux — default: open dashboard
 ./scripts/apply.sh
+# Skip opening the browser (also saves the preference)
+./scripts/apply.sh --no-open
+# Force open and re-enable auto-open preference
+./scripts/apply.sh --open
+
 # Windows PowerShell
 .\scripts\apply.ps1
+.\scripts\apply.ps1 -NoOpen
+.\scripts\apply.ps1 -Open
 ```
 
+**Preferences** live in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`):
+
+```json
+{ "openDashboardOnApply": true, "weeklyReview": false }
+```
+
+- `--no-open` / `-NoOpen` sets `openDashboardOnApply` to `false` (persisted). `--open` / `-Open` sets it back to `true`. Default when missing is open (`true`).
+- Weekly review is **off by default** (opt-in). See [Optional weekly review](#optional-weekly-review) below.
+
 After it opens, click **Load sample log** for illustrative estimates (not live Cursor/Claude/Codex billing). Manual `cp` of `SKILL.md` alone does **not** auto-start the dashboard.
+
+## Optional weekly review
+
+Weekly reviews summarize your **local** `~/.auto-model-router/logs/usage.jsonl` (tiers confirmed/overridden, counts, illustrative relative-unit estimates). They do **not** read Cursor, Claude Code, Codex, or any vendor billing/token API.
+
+```bash
+# Enable / disable (persists weeklyReview in config.json)
+./scripts/apply.sh --enable-weekly-review
+./scripts/apply.sh --disable-weekly-review
+# Windows PowerShell
+.\scripts\apply.ps1 -EnableWeeklyReview
+.\scripts\apply.ps1 -DisableWeeklyReview
+
+# Run a review now (works even when disabled if you pass --force)
+python3 ~/.auto-model-router/weekly_review.py --force
+# or from a clone:
+python3 scripts/weekly_review.py --force
+
+# Optional: also open the savings dashboard after the summary
+python3 scripts/weekly_review.py --force --open
+```
+
+To run truly weekly without thinking about it, use your OS scheduler — **nothing is installed silently**. You can either:
+
+1. Add a cron / Task Scheduler entry yourself (recommended if you want full control), for example Mondays 09:00:
+   - macOS/Linux cron: `0 9 * * 1 python3 ~/.auto-model-router/weekly_review.py --force`
+   - Windows Task Scheduler: weekly trigger running `python %USERPROFILE%\.auto-model-router\weekly_review.py --force`
+2. Or pass an **explicit** opt-in flag on apply (also sets `weeklyReview=true`):
+
+```bash
+./scripts/apply.sh --install-schedule     # user crontab Mondays 09:00
+./scripts/apply.sh --uninstall-schedule   # remove that crontab entry
+# Windows
+.\scripts\apply.ps1 -InstallSchedule    # task AutoModelRouterWeeklyReview
+.\scripts\apply.ps1 -UninstallSchedule
+```
 
 ## What this supports
 
@@ -32,7 +84,7 @@ If you are running out of usage or burning tokens, this targets **model overkill
 
 ## Quick start (about 60 seconds)
 
-**Preferred:** clone this repository and run `./scripts/apply.sh` (macOS/Linux) or `.\scripts\apply.ps1` (Windows) so skills install **and** the savings dashboard opens. For project-only installs without the dashboard auto-start, download or clone, then run the commands below from the **root of your target project**. Replace `/path/to/auto-model-router` with the location of this clone. If the target project is this repository itself, the shorter relative source paths shown in the host sections also work. Project installs are the best choice for teams and cloud/background agents because the files can be committed:
+**Preferred:** clone this repository and run `./scripts/apply.sh` (macOS/Linux) or `.\scripts\apply.ps1` (Windows) so skills install **and** the savings dashboard opens by default (use `--no-open` / `-NoOpen` to skip; preference saved under `.auto-model-router/config.json`). For project-only installs without the dashboard auto-start, download or clone, then run the commands below from the **root of your target project**. Replace `/path/to/auto-model-router` with the location of this clone. If the target project is this repository itself, the shorter relative source paths shown in the host sections also work. Project installs are the best choice for teams and cloud/background agents because the files can be committed:
 
 ```bash
 # Cursor
