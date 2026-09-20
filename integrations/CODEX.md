@@ -29,7 +29,7 @@ Some older/configured installs also support `$CODEX_HOME/skills` (normally `~/.c
 4. Map the confirmed tier to the Codex model and/or reasoning effort configured for the project, then run.
 5. Escalate toward `reasoning` or `max` after an insufficient light attempt and explain the change once.
 
-Tier labels are deliberately not Codex product names. Keep the mapping in project instructions so it can evolve with the available Codex models.
+Tier labels are deliberately not Codex product names. Keep the mapping in project instructions so it can evolve with the available Codex models. Savings Desk can write a local stub at `~/.auto-model-router/codex-tier-map.json` from [`codex-tier-map.example.json`](codex-tier-map.example.json) after you opt in to the audit. Not an OpenAI usage meter.
 
 ## Verify
 

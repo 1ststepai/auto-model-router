@@ -71,9 +71,9 @@ Auto suggests <tier> — <short reason>. Confirm to run, or override: fast, stan
 - Do not ignore an explicit model, provider, effort, or tier choice.
 - Do not present heuristic output as a production-quality classifier or as an official vendor recommendation.
 
-## Optional local usage log
+## Optional local usage log (consent-gated)
 
-After a confirmed run, a host **may** append one JSON object per run to `.auto-model-router/usage.jsonl` when the project/user has enabled this local telemetry. This is the optional connection used by [`demo/savings_estimator.py`](https://github.com/1ststepai/auto-model-router/blob/main/demo/savings_estimator.py); it does not call or scrape Cursor, Claude Code, Codex, or any billing API.
+After a confirmed run (or a policy auto-continue, when boundary gates are on), a host **may** append one JSON object per run to `.auto-model-router/usage.jsonl` **only when** `auditOptIn` is `true` in `~/.auto-model-router/config.json` (or a project `.auto-model-router/config.json`). If the flag is missing or false, do not write the log. This is the optional connection used by [`demo/savings_estimator.py`](https://github.com/1ststepai/auto-model-router/blob/main/demo/savings_estimator.py) and Savings Desk (`scripts/audit_usage.py`); it does not call or scrape Cursor, Claude Code, Codex, Gemini, or any billing API.
 
 Minimum schema (one object per line):
 
@@ -81,13 +81,32 @@ Minimum schema (one object per line):
 {"timestamp":"2026-09-20T13:00:00Z","tier":"standard","confirmed":true,"overridden":false}
 ```
 
-Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields include `suggested_tier`, `host`, and a non-sensitive `task_kind`. Do not log prompts, task text, code, secrets, customer data, or provider credentials by default. The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
+Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields include `suggested_tier`, `host`, a non-sensitive `task_kind`, and `gate` (`auto_continue`, `confirm`, or `hard_gate`). For auto-continue, `confirmed` may be `true` (policy-authorized) when `gate` is `auto_continue`.
+
+**Collected when opted in:** timestamp, tier, suggested_tier, confirmed, overridden, host, task_kind, gate.
+
+**Never collect:** prompts, task text, code, secrets, customer data, provider credentials, or anything from a vendor billing/quota API.
+
+The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
 
 ## On apply / first use
 
 SKILL.md cannot magically open a GUI when Cursor or Claude merely loads a skill — no host hook exists for that. Prefer the apply scripts (`scripts/apply.sh` / `scripts/apply.ps1`) so install copies the demo and opens the savings dashboard by default. Users may disable auto-open with `./scripts/apply.sh --no-open` or `.\scripts\apply.ps1 -NoOpen` (preference saved in `~/.auto-model-router/config.json` as `openDashboardOnApply`); re-enable with `--open` / `-Open`.
 
-Config shape: `{ "openDashboardOnApply": true, "weeklyReview": false }`. Weekly review is **opt-in** (`--enable-weekly-review` / `-EnableWeeklyReview`); it never runs unless enabled or `--force` is passed.
+Config shape:
+
+```json
+{
+  "openDashboardOnApply": true,
+  "weeklyReview": false,
+  "auditOptIn": false,
+  "hosts": ["cursor", "claude-code", "codex"],
+  "usageLogPath": "",
+  "boundaryGatedConfirms": false
+}
+```
+
+Weekly review and the usage audit are **opt-in** (`--enable-weekly-review`, `--enable-audit`); they never run unless enabled or `--force` is passed. Empty `usageLogPath` means `~/.auto-model-router/logs/usage.jsonl`.
 
 When the user just installed the skill, says they applied it, or asks to apply / show the savings dashboard:
 
@@ -106,8 +125,22 @@ If `weeklyReview` is `true` in `~/.auto-model-router/config.json`, or the user a
 3. If the log is empty, say so; the script may show the sample log format — label that as sample, not the user's history.
 4. Do not install cron/Task Scheduler jobs unless the user explicitly asks; point them at `--install-schedule` / `-InstallSchedule` or the cron examples in INSTALL.md.
 
+## Savings Desk (opt-in audit → automation)
+
+If the user opted in (`auditOptIn=true`) or asks to audit usage / show Savings Desk:
+
+1. Do not invent vendor bills. Run `python3 ~/.auto-model-router/audit_usage.py` (or `python3 scripts/audit_usage.py --force` from a clone).
+2. Summarize burns by host, confirm/override rates, heavy-tier use on likely-light `task_kind`s, and relative units vs always-max. Label sample-log fallbacks as sample.
+3. Offer to apply recommendations (`python3 scripts/apply_recommendations.py`) which writes local `cursor-tier-map.json` plus Claude/Codex stubs, sets `boundaryGatedConfirms=true`, and can enable the weekly digest. This complements the skill; it does not replace hosts or flip native Auto.
+4. Spell out remaining actions: enable boundary gates, map fast→X (fill picker placeholders), turn on weekly digest.
+5. Point at `~/.auto-model-router/demo/dashboard.html` (or `demo/dashboard.html`) for the hosts-filter UI. The “Savings Desk Pro” panel is a labeled stub — no checkout.
+
+See [`docs/SAVINGS_DESK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/SAVINGS_DESK.md) and [`docs/STACK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/STACK.md). Context-lean peers (lean.ctx, ponytail, or any packer) stay optional; a host-neutral checklist is `scripts/context_budget_checklist.md`.
+
 ## Honesty
 
 This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest → confirm/override → run the lightest sufficient option → escalate on failure**.
+
+AMR does not read Cursor, Claude Code, Codex, or Gemini usage/quota/billing APIs. Optional local `usage.jsonl` plus the dashboard are estimates only.
 
 For human installation instructions, see [`INSTALL.md`](https://github.com/1ststepai/auto-model-router/blob/main/INSTALL.md).

@@ -15,163 +15,21 @@ import json
 import os
 import subprocess
 import sys
-from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-TIERS = ("fast", "standard", "reasoning", "max")
-EXAMPLE_RATES = {"fast": 1.0, "standard": 3.0, "reasoning": 8.0, "max": 20.0}
-
-DEFAULT_CONFIG = {
-    "openDashboardOnApply": True,
-    "weeklyReview": False,
-}
-
-
-def amr_home() -> Path:
-    home = os.environ.get("HOME") or os.environ.get("USERPROFILE") or ""
-    if not home:
-        raise SystemExit("error: HOME / USERPROFILE is not set")
-    return Path(home) / ".auto-model-router"
-
-
-def config_path() -> Path:
-    return amr_home() / "config.json"
-
-
-def default_usage_log() -> Path:
-    return amr_home() / "logs" / "usage.jsonl"
-
-
-def sample_log_candidates() -> List[Path]:
-    here = Path(__file__).resolve()
-    roots = [
-        amr_home() / "demo" / "sample_usage_log.json",
-        here.parent.parent / "demo" / "sample_usage_log.json",
-    ]
-    return roots
-
-
-def load_config() -> Dict[str, Any]:
-    path = config_path()
-    cfg = dict(DEFAULT_CONFIG)
-    if not path.is_file():
-        return cfg
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return cfg
-    if isinstance(data, dict):
-        cfg.update(data)
-    return cfg
-
-
-def parse_timestamp(value: Any) -> Optional[datetime]:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        dt = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def load_jsonl(path: Path) -> List[Dict[str, Any]]:
-    if not path.is_file():
-        return []
-    entries: List[Dict[str, Any]] = []
-    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(obj, dict) and "tier" in obj:
-            entries.append(obj)
-    return entries
-
-
-def load_sample_json(path: Path) -> List[Dict[str, Any]]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-    if isinstance(payload, list):
-        return [x for x in payload if isinstance(x, dict) and "tier" in x]
-    if isinstance(payload, dict):
-        for key in ("decisions", "usage", "log", "entries"):
-            raw = payload.get(key)
-            if isinstance(raw, list):
-                return [x for x in raw if isinstance(x, dict) and "tier" in x]
-    return []
-
-
-def filter_window(
-    entries: List[Dict[str, Any]], *, days: int, now: datetime
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Return (in_window, missing_timestamp)."""
-    start = now - timedelta(days=days)
-    in_window: List[Dict[str, Any]] = []
-    missing: List[Dict[str, Any]] = []
-    for item in entries:
-        ts = parse_timestamp(item.get("timestamp"))
-        if ts is None:
-            missing.append(item)
-            continue
-        if start <= ts <= now:
-            in_window.append(item)
-    return in_window, missing
-
-
-def summarize(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    by_tier = Counter()
-    confirmed = 0
-    overridden = 0
-    routed = 0.0
-    hosts: Counter = Counter()
-    for item in entries:
-        tier = str(item.get("tier", "")).strip().lower()
-        if tier not in TIERS:
-            continue
-        by_tier[tier] += 1
-        routed += EXAMPLE_RATES[tier]
-        if item.get("confirmed") in (True, "true", "True", 1, "1", "yes"):
-            confirmed += 1
-        if item.get("overridden") in (True, "true", "True", 1, "1", "yes"):
-            overridden += 1
-        host = item.get("host")
-        if host:
-            hosts[str(host)] += 1
-    count = sum(by_tier.values())
-    always_reasoning = count * EXAMPLE_RATES["reasoning"]
-    always_max = count * EXAMPLE_RATES["max"]
-
-    def pct_saved(baseline: float, value: float) -> float:
-        if baseline <= 0:
-            return 0.0
-        return round((baseline - value) / baseline * 100, 1)
-
-    return {
-        "task_count": count,
-        "tasks_by_tier": {t: by_tier.get(t, 0) for t in TIERS},
-        "confirmed_count": confirmed,
-        "override_count": overridden,
-        "override_rate_pct": round(overridden / count * 100, 1) if count else 0.0,
-        "hosts": dict(hosts),
-        "routed_relative_units": round(routed, 2),
-        "estimated_savings_vs_always_reasoning_pct": pct_saved(always_reasoning, routed),
-        "estimated_savings_vs_always_max_pct": pct_saved(always_max, routed),
-    }
+from amr_usage import (
+    TIERS,
+    filter_window,
+    honesty_lines,
+    load_config,
+    load_usage_entries,
+    next_actions,
+    resolve_usage_log,
+    sample_log_candidates,
+    summarize,
+)
 
 
 def human_report(
@@ -182,8 +40,8 @@ def human_report(
     used_sample: bool,
     missing_ts: int,
     now: datetime,
+    cfg: Dict[str, Any],
 ) -> str:
-    start = now - timedelta(days=window_days)
     counts = ", ".join(
         f"{t}={summary['tasks_by_tier'][t]}"
         for t in TIERS
@@ -192,11 +50,10 @@ def human_report(
     lines = [
         "Auto Model Router — weekly review",
         f"Window: last {window_days} day(s) "
-        f"({start.date().isoformat()} → {now.date().isoformat()}, local-aware timestamps)",
+        f"(ending {now.date().isoformat()}, local-aware timestamps)",
         f"Log: {log_path}",
         "",
-        "Honest scope: local usage log only. Not live Cursor/Claude/Codex billing.",
-        "Rates below are illustrative relative units, not vendor prices.",
+        *honesty_lines(),
         "",
     ]
     if used_sample:
@@ -208,7 +65,7 @@ def human_report(
     if summary["task_count"] == 0:
         lines.extend([
             "No routing decisions in this window.",
-            "After confirmed runs, agents may append non-sensitive lines to usage.jsonl.",
+            "After authorized runs (confirm or auto-continue), agents may append non-sensitive lines to usage.jsonl.",
             "See SKILL.md for the schema. Nothing is forced; weekly review stays opt-in.",
         ])
         return "\n".join(lines)
@@ -216,20 +73,29 @@ def human_report(
     lines.extend([
         f"Decisions in window: {summary['task_count']} ({counts})",
         f"Confirmed: {summary['confirmed_count']}  |  Overrides: {summary['override_count']} "
-        f"({summary['override_rate_pct']}%)",
+        f"({summary['override_rate_pct']}%)  |  Confirm rate: {summary['confirm_rate_pct']}%",
         f"Routed usage: {summary['routed_relative_units']:.1f} relative units",
         f"Est. savings vs always-reasoning: {summary['estimated_savings_vs_always_reasoning_pct']:.1f}%",
         f"Est. savings vs always-max: {summary['estimated_savings_vs_always_max_pct']:.1f}%",
+        f"Switch-downs: {summary['switch_down_count']}  |  Heavy-on-light: {summary['heavy_on_light_count']}",
     ])
-    if summary["hosts"]:
-        host_bits = ", ".join(f"{h}={n}" for h, n in sorted(summary["hosts"].items()))
-        lines.append(f"Hosts (when logged): {host_bits}")
+    burns = summary.get("burns_by_host") or {}
+    if burns:
+        host_bits = ", ".join(
+            f"{host}={stats['count']}/{stats['relative_units']:.0f}u"
+            for host, stats in burns.items()
+        )
+        lines.append(f"Burns by host (count/rel units): {host_bits}")
     if missing_ts:
         lines.append(
             f"Note: {missing_ts} log line(s) lacked a parseable timestamp and were excluded."
         )
+    actions = next_actions(summary, cfg)
+    if actions:
+        lines.append("Next: " + "; ".join(action["title"] for action in actions[:3]))
     lines.extend([
         "",
+        "Full Savings Desk audit: python3 scripts/audit_usage.py --force",
         "Percentages estimate this local log only; no savings are guaranteed.",
         "No vendor billing or token API was accessed.",
     ])
@@ -304,12 +170,12 @@ def main(argv: List[str]) -> int:
         )
         return 1
 
-    log_path = args.log or default_usage_log()
-    entries = load_jsonl(log_path)
+    log_path = resolve_usage_log(cfg, args.log)
+    entries = load_usage_entries(log_path)
     used_sample = False
     if not entries:
         for candidate in sample_log_candidates():
-            sample = load_sample_json(candidate)
+            sample = load_usage_entries(candidate)
             if sample:
                 entries = sample
                 used_sample = True
@@ -332,6 +198,7 @@ def main(argv: List[str]) -> int:
             used_sample=used_sample,
             missing_ts=len(missing),
             now=now,
+            cfg=cfg,
         )
     )
 
@@ -349,7 +216,7 @@ def main(argv: List[str]) -> int:
         print(json.dumps(payload, indent=2))
 
     if args.open_dashboard:
-        dash = amr_home() / "demo" / "dashboard.html"
+        dash = Path.home() / ".auto-model-router" / "demo" / "dashboard.html"
         if not dash.is_file():
             dash = Path(__file__).resolve().parent.parent / "demo" / "dashboard.html"
         if open_dashboard(dash):

@@ -7,6 +7,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILL_SRC="$ROOT/skills/auto-model-router/SKILL.md"
 DEMO_SRC="$ROOT/demo"
 WEEKLY_SRC="$ROOT/scripts/weekly_review.py"
+AMR_USAGE_SRC="$ROOT/scripts/amr_usage.py"
+AUDIT_SRC="$ROOT/scripts/audit_usage.py"
+APPLY_REC_SRC="$ROOT/scripts/apply_recommendations.py"
 
 usage() {
   cat <<'USAGE'
@@ -17,6 +20,11 @@ Dashboard:
   --no-open              Do not open browser; set openDashboardOnApply=false
   --open                 Open browser; set openDashboardOnApply=true
 
+Savings Desk audit (opt-in; local usage log only — not vendor billing):
+  --enable-audit           Set auditOptIn=true (required before agents append usage.jsonl)
+  --disable-audit          Set auditOptIn=false
+  --apply-recommendations  Write local tier-map stubs + boundaryGatedConfirms=true
+
 Weekly review (opt-in; local usage log only — not vendor billing):
   --enable-weekly-review   Set weeklyReview=true
   --disable-weekly-review  Set weeklyReview=false
@@ -24,15 +32,21 @@ Weekly review (opt-in; local usage log only — not vendor billing):
   --uninstall-schedule     Remove the weekly schedule installed by this script
 
 Preference file: ~/.auto-model-router/config.json
-  { "openDashboardOnApply": true, "weeklyReview": false }
+  { "openDashboardOnApply": true, "weeklyReview": false, "auditOptIn": false,
+    "hosts": ["cursor", "claude-code", "codex"], "usageLogPath": "",
+    "boundaryGatedConfirms": false }
 
-Run a review anytime:
-  python3 ~/.auto-model-router/weekly_review.py --force
+Try Savings Desk:
+  ./scripts/apply.sh --enable-audit --no-open
+  python3 ~/.auto-model-router/audit_usage.py --force
+  python3 ~/.auto-model-router/apply_recommendations.py --force
 USAGE
 }
 
 FLAG_OPEN=""
 FLAG_WEEKLY=""
+FLAG_AUDIT=""
+APPLY_RECOMMENDATIONS=0
 INSTALL_SCHEDULE=0
 UNINSTALL_SCHEDULE=0
 
@@ -52,6 +66,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --disable-weekly-review)
       FLAG_WEEKLY=0
+      shift
+      ;;
+    --enable-audit)
+      FLAG_AUDIT=1
+      shift
+      ;;
+    --disable-audit)
+      FLAG_AUDIT=0
+      shift
+      ;;
+    --apply-recommendations)
+      APPLY_RECOMMENDATIONS=1
       shift
       ;;
     --install-schedule)
@@ -90,6 +116,9 @@ DEMO_DEST="$AMR_HOME/demo"
 LOGS_DEST="$AMR_HOME/logs"
 CONFIG_FILE="$AMR_HOME/config.json"
 WEEKLY_DEST="$AMR_HOME/weekly_review.py"
+AMR_USAGE_DEST="$AMR_HOME/amr_usage.py"
+AUDIT_DEST="$AMR_HOME/audit_usage.py"
+APPLY_REC_DEST="$AMR_HOME/apply_recommendations.py"
 CRON_MARKER="# auto-model-router-weekly-review"
 
 # Merge one boolean key into config.json without wiping sibling keys.
@@ -103,7 +132,14 @@ from pathlib import Path
 path = Path(sys.argv[1])
 key = sys.argv[2]
 val = sys.argv[3].lower() == "true"
-cfg = {"openDashboardOnApply": True, "weeklyReview": False}
+cfg = {
+    "openDashboardOnApply": True,
+    "weeklyReview": False,
+    "auditOptIn": False,
+    "hosts": ["cursor", "claude-code", "codex"],
+    "usageLogPath": "",
+    "boundaryGatedConfirms": False,
+}
 if path.is_file():
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -112,10 +148,12 @@ if path.is_file():
     except (OSError, json.JSONDecodeError):
         pass
 cfg[key] = val
-# Normalize known keys to bools when present
-for k in ("openDashboardOnApply", "weeklyReview"):
+for k in ("openDashboardOnApply", "weeklyReview", "auditOptIn", "boundaryGatedConfirms"):
     if k in cfg:
         cfg[k] = bool(cfg[k])
+if not isinstance(cfg.get("hosts"), list):
+    cfg["hosts"] = ["cursor", "claude-code", "codex"]
+cfg["usageLogPath"] = str(cfg.get("usageLogPath") or "")
 path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 print(f"  preference → {path} ({key}={'true' if val else 'false'})")
 PY
@@ -215,13 +253,41 @@ if [[ -f "$WEEKLY_SRC" ]]; then
   chmod +x "$WEEKLY_DEST"
   echo "  weekly review → $WEEKLY_DEST"
 fi
+if [[ -f "$AMR_USAGE_SRC" ]]; then
+  cp "$AMR_USAGE_SRC" "$AMR_USAGE_DEST"
+  echo "  usage helpers → $AMR_USAGE_DEST"
+fi
+if [[ -f "$AUDIT_SRC" ]]; then
+  cp "$AUDIT_SRC" "$AUDIT_DEST"
+  chmod +x "$AUDIT_DEST"
+  echo "  audit → $AUDIT_DEST"
+fi
+if [[ -f "$APPLY_REC_SRC" ]]; then
+  cp "$APPLY_REC_SRC" "$APPLY_REC_DEST"
+  chmod +x "$APPLY_REC_DEST"
+  echo "  apply recommendations → $APPLY_REC_DEST"
+fi
+EXAMPLES_DEST="$AMR_HOME/examples"
+mkdir -p "$EXAMPLES_DEST"
+for map in cursor-tier-map.example.json claude-tier-map.example.json codex-tier-map.example.json gemini-tier-map.example.json; do
+  if [[ -f "$ROOT/integrations/$map" ]]; then
+    cp "$ROOT/integrations/$map" "$EXAMPLES_DEST/$map"
+  fi
+done
+if [[ -f "$ROOT/integrations/config.example.json" ]]; then
+  cp "$ROOT/integrations/config.example.json" "$EXAMPLES_DEST/config.example.json"
+fi
 
 # Ensure config exists with defaults (do not wipe user values).
 if [[ ! -f "$CONFIG_FILE" ]]; then
   mkdir -p "$AMR_HOME"
   printf '%s\n' '{
   "openDashboardOnApply": true,
-  "weeklyReview": false
+  "weeklyReview": false,
+  "auditOptIn": false,
+  "hosts": ["cursor", "claude-code", "codex"],
+  "usageLogPath": "",
+  "boundaryGatedConfirms": false
 }' > "$CONFIG_FILE"
   echo "  created config → $CONFIG_FILE"
 fi
@@ -248,6 +314,13 @@ if [[ -n "$FLAG_WEEKLY" ]]; then
     set_config_bool weeklyReview true
   else
     set_config_bool weeklyReview false
+  fi
+fi
+if [[ -n "$FLAG_AUDIT" ]]; then
+  if [[ "$FLAG_AUDIT" -eq 1 ]]; then
+    set_config_bool auditOptIn true
+  else
+    set_config_bool auditOptIn false
   fi
 fi
 
@@ -283,6 +356,19 @@ if [[ "$SHOULD_OPEN" -eq 1 ]]; then
 fi
 
 WEEKLY_ON="$(read_config_bool weeklyReview false)"
+AUDIT_ON="$(read_config_bool auditOptIn false)"
+
+if [[ "$APPLY_RECOMMENDATIONS" -eq 1 ]]; then
+  if [[ "$AUDIT_ON" -ne 1 ]]; then
+    echo "  --apply-recommendations skipped: enable audit first (--enable-audit)."
+  elif [[ -f "$APPLY_REC_DEST" ]]; then
+    echo
+    echo "Applying Savings Desk recommendations (local maps + boundary-gate flag)..."
+    python3 "$APPLY_REC_DEST" --dest "$AMR_HOME" || true
+  else
+    echo "  apply_recommendations.py not installed; skip --apply-recommendations"
+  fi
+fi
 
 echo
 echo "Success: auto-model-router applied."
@@ -304,6 +390,15 @@ if [[ "$WEEKLY_ON" -eq 1 ]]; then
   echo "  Run: python3 $WEEKLY_DEST --force"
 else
   echo "  Weekly review: disabled (opt-in). Enable: ./scripts/apply.sh --enable-weekly-review"
+fi
+if [[ "$AUDIT_ON" -eq 1 ]]; then
+  echo "  Savings Desk audit: enabled (local log only — not vendor billing)."
+  echo "  Collected: tier, host, confirmed/overridden, task_kind, gate, timestamp."
+  echo "  Never: prompts, code, secrets, vendor credentials, billing APIs."
+  echo "  Run: python3 $AUDIT_DEST --force"
+  echo "  Automate: python3 $APPLY_REC_DEST"
+else
+  echo "  Savings Desk audit: disabled (opt-in). Enable: ./scripts/apply.sh --enable-audit"
 fi
 echo
 echo "Note: Cursor/Claude loading SKILL.md alone cannot open a GUI."

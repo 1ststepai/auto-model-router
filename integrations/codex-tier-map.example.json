@@ -1,0 +1,19 @@
+{
+  "comment": "Local Codex adapter stub — replace placeholders with the Codex model and/or reasoning effort you use. Not an OpenAI usage meter.",
+  "fast": {
+    "model": "<your-fast-codex>",
+    "effort": "low"
+  },
+  "standard": {
+    "model": "<your-standard-codex>",
+    "effort": "medium"
+  },
+  "reasoning": {
+    "model": "<your-reasoning-codex>",
+    "effort": "high"
+  },
+  "max": {
+    "model": "<your-max-codex>",
+    "effort": "max"
+  }
+}

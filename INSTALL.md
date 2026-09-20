@@ -98,13 +98,49 @@ From a clone of this repository:
 **Preferences** live in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`):
 
 ```json
-{ "openDashboardOnApply": true, "weeklyReview": false }
+{
+  "openDashboardOnApply": true,
+  "weeklyReview": false,
+  "auditOptIn": false,
+  "hosts": ["cursor", "claude-code", "codex"],
+  "usageLogPath": "",
+  "boundaryGatedConfirms": false
+}
 ```
 
 - `--no-open` / `-NoOpen` sets `openDashboardOnApply` to `false` (persisted). `--open` / `-Open` sets it back to `true`. Default when missing is open (`true`).
-- Weekly review is **off by default** (opt-in). See [Optional weekly review](#optional-weekly-review) below.
+- Weekly review and the usage audit are **off by default** (opt-in). See [Savings Desk](#savings-desk-opt-in-audit) and [Optional weekly review](#optional-weekly-review) below.
+- Empty `usageLogPath` means `~/.auto-model-router/logs/usage.jsonl`.
 
 After it opens, click **Load sample log** for illustrative estimates (not live Cursor/Claude/Codex billing). Manual `cp` of `SKILL.md` alone does **not** auto-start the dashboard.
+
+## Savings Desk (opt-in audit)
+
+Savings Desk is the consent → audit → automate path. It reads **local** `usage.jsonl` only. It does not scrape Cursor, Claude Code, Codex, or Gemini billing.
+
+**Collected** when `auditOptIn` is true: `timestamp`, `tier`, `suggested_tier`, `confirmed`, `overridden`, `host`, `task_kind`, `gate`.
+
+**Never collected:** prompts, task text, code, secrets, customer data, vendor credentials, billing/quota API data.
+
+```bash
+# 1. Opt in
+./scripts/apply.sh --enable-audit --no-open
+# Windows: .\scripts\apply.ps1 -EnableAudit -NoOpen
+
+# 2. Audit (uses the sample log, labeled as sample, if yours is empty)
+python3 scripts/audit_usage.py --force
+# or after apply: python3 ~/.auto-model-router/audit_usage.py --force
+
+# 3. Apply automation: local cursor-tier-map.json + Claude/Codex stubs,
+#    boundaryGatedConfirms=true, optional weekly digest
+python3 scripts/apply_recommendations.py --enable-weekly-review
+# or: ./scripts/apply.sh --enable-audit --apply-recommendations --no-open
+
+# 4. Open the dashboard (hosts filter, relative savings, switch-downs, Pro stub)
+#    ~/.auto-model-router/demo/dashboard.html  or  demo/dashboard.html
+```
+
+Fill the `<your-fast-model>` placeholders in the local maps with labels from **your** picker. AMR does not flip native Auto. See [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md), [`docs/STACK.md`](docs/STACK.md), and [`docs/boundary-gated-confirms.md`](docs/boundary-gated-confirms.md).
 
 ## Optional weekly review
 
@@ -359,7 +395,7 @@ The repository includes an honest, offline MVP for estimating relative costs fro
 python3 demo/savings_estimator.py demo/sample_usage_log.json
 ```
 
-You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log**, or paste your own JSON. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
+You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log**, or paste your own JSON. After confirmed runs **and only if `auditOptIn` is true**, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
 
 ## Any other agent
 

@@ -16,7 +16,7 @@ Thanks for helping make Auto Model Router clearer, safer, and more useful across
 - Update [`examples.md`](examples.md) when the user-facing rubric changes.
 - Prefer a false-positive-resistant signal over a clever opaque rule. Keep explicit model/provider/effort choices as overrides.
 - Run the example suite and inspect both the suggestion line and JSON output.
-- Keep `demo/sample_usage_log.json`, `demo/savings_estimator.py`, and `demo/dashboard.html` honest about example rates and non-live data.
+- Keep `demo/sample_usage_log.json`, `demo/savings_estimator.py`, `demo/dashboard.html`, and Savings Desk scripts honest about example rates and non-live data. Do not add fake vendor billing APIs or a production routing proxy.
 
 ## Add a host adapter
 
@@ -38,6 +38,8 @@ python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
 python3 -m compileall -q demo scripts
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 scripts/audit_usage.py --force --sample --json
+python3 scripts/test_savings_desk.py
 python3 scripts/validate-plugins.py
 git diff --check
 ```

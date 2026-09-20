@@ -9,6 +9,7 @@ The heuristic intentionally routes authentication, secrets, irreversible actions
 ## Secrets and sensitive data
 
 - The skill contains no credentials, API keys, tokens, or required network calls.
+- The optional usage log is **consent-gated** (`auditOptIn`). When on, agents may record only `timestamp`, `tier`, `suggested_tier`, `confirmed`, `overridden`, `host`, `task_kind`, and `gate`. They must not log prompts, code, secrets, customer data, vendor credentials, or billing/quota API payloads.
 - Do not commit secrets, private prompts, customer data, or proprietary logs to this repository or to issue reports.
 - Review any copied skill, custom rule, `AGENTS.md`, or `CLAUDE.md` before sharing it; repository instructions are executable context for an agent.
 - Keep provider credentials in the host's supported secret store, never in the skill or examples.

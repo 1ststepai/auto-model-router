@@ -1,0 +1,19 @@
+{
+  "comment": "Local Claude Code adapter stub — replace placeholders with models/effort you actually have enabled. Not an Anthropic billing API and not a silent model switch.",
+  "fast": {
+    "model": "<your-fast-claude>",
+    "effort": "low"
+  },
+  "standard": {
+    "model": "<your-standard-claude>",
+    "effort": "medium"
+  },
+  "reasoning": {
+    "model": "<your-reasoning-claude>",
+    "effort": "high"
+  },
+  "max": {
+    "model": "<your-max-claude>",
+    "effort": "max"
+  }
+}

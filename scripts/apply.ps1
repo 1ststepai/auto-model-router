@@ -6,6 +6,9 @@ param(
   [switch]$Open,
   [switch]$EnableWeeklyReview,
   [switch]$DisableWeeklyReview,
+  [switch]$EnableAudit,
+  [switch]$DisableAudit,
+  [switch]$ApplyRecommendations,
   [switch]$InstallSchedule,
   [switch]$UninstallSchedule,
   [switch]$Help
@@ -22,6 +25,11 @@ Dashboard:
   -NoOpen                 Do not open browser; set openDashboardOnApply=false
   -Open                   Open browser; set openDashboardOnApply=true
 
+Savings Desk audit (opt-in; local usage log only — not vendor billing):
+  -EnableAudit            Set auditOptIn=true (required before agents append usage.jsonl)
+  -DisableAudit           Set auditOptIn=false
+  -ApplyRecommendations   Write local tier-map stubs + boundaryGatedConfirms=true
+
 Weekly review (opt-in; local usage log only — not vendor billing):
   -EnableWeeklyReview     Set weeklyReview=true
   -DisableWeeklyReview    Set weeklyReview=false
@@ -29,10 +37,14 @@ Weekly review (opt-in; local usage log only — not vendor billing):
   -UninstallSchedule      Remove the weekly task installed by this script
 
 Preference file: `$env:USERPROFILE\.auto-model-router\config.json
-  { "openDashboardOnApply": true, "weeklyReview": false }
+  { "openDashboardOnApply": true, "weeklyReview": false, "auditOptIn": false,
+    "hosts": ["cursor", "claude-code", "codex"], "usageLogPath": "",
+    "boundaryGatedConfirms": false }
 
-Run a review anytime:
-  python `$env:USERPROFILE\.auto-model-router\weekly_review.py --force
+Try Savings Desk:
+  .\scripts\apply.ps1 -EnableAudit -NoOpen
+  python `$env:USERPROFILE\.auto-model-router\audit_usage.py --force
+  python `$env:USERPROFILE\.auto-model-router\apply_recommendations.py --force
 "@
   exit 0
 }
@@ -43,11 +55,17 @@ if ($NoOpen -and $Open) {
 if ($EnableWeeklyReview -and $DisableWeeklyReview) {
   Write-Error "Specify only one of -EnableWeeklyReview or -DisableWeeklyReview"
 }
+if ($EnableAudit -and $DisableAudit) {
+  Write-Error "Specify only one of -EnableAudit or -DisableAudit"
+}
 
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $SkillSrc = Join-Path $Root "skills\auto-model-router\SKILL.md"
 $DemoSrc = Join-Path $Root "demo"
 $WeeklySrc = Join-Path $Root "scripts\weekly_review.py"
+$AmrUsageSrc = Join-Path $Root "scripts\amr_usage.py"
+$AuditSrc = Join-Path $Root "scripts\audit_usage.py"
+$ApplyRecSrc = Join-Path $Root "scripts\apply_recommendations.py"
 
 if (-not (Test-Path -LiteralPath $SkillSrc)) {
   Write-Error "Missing skill at $SkillSrc"
@@ -63,12 +81,19 @@ $DemoDest = Join-Path $AmrHome "demo"
 $LogsDest = Join-Path $AmrHome "logs"
 $ConfigFile = Join-Path $AmrHome "config.json"
 $WeeklyDest = Join-Path $AmrHome "weekly_review.py"
+$AmrUsageDest = Join-Path $AmrHome "amr_usage.py"
+$AuditDest = Join-Path $AmrHome "audit_usage.py"
+$ApplyRecDest = Join-Path $AmrHome "apply_recommendations.py"
 $TaskName = "AutoModelRouterWeeklyReview"
 
 function Read-Config {
   $cfg = [ordered]@{
     openDashboardOnApply = $true
     weeklyReview = $false
+    auditOptIn = $false
+    hosts = @("cursor", "claude-code", "codex")
+    usageLogPath = ""
+    boundaryGatedConfirms = $false
   }
   if (Test-Path -LiteralPath $ConfigFile) {
     try {
@@ -79,6 +104,18 @@ function Read-Config {
       }
       if ($null -ne $parsed.weeklyReview) {
         $cfg.weeklyReview = [bool]$parsed.weeklyReview
+      }
+      if ($null -ne $parsed.auditOptIn) {
+        $cfg.auditOptIn = [bool]$parsed.auditOptIn
+      }
+      if ($null -ne $parsed.boundaryGatedConfirms) {
+        $cfg.boundaryGatedConfirms = [bool]$parsed.boundaryGatedConfirms
+      }
+      if ($null -ne $parsed.usageLogPath) {
+        $cfg.usageLogPath = [string]$parsed.usageLogPath
+      }
+      if ($null -ne $parsed.hosts) {
+        $cfg.hosts = @($parsed.hosts)
       }
     } catch {
       # keep defaults
@@ -93,8 +130,12 @@ function Write-Config {
   $obj = [ordered]@{
     openDashboardOnApply = [bool]$Cfg.openDashboardOnApply
     weeklyReview = [bool]$Cfg.weeklyReview
+    auditOptIn = [bool]$Cfg.auditOptIn
+    hosts = @($Cfg.hosts)
+    usageLogPath = [string]$Cfg.usageLogPath
+    boundaryGatedConfirms = [bool]$Cfg.boundaryGatedConfirms
   }
-  $json = ($obj | ConvertTo-Json -Compress) + [Environment]::NewLine
+  $json = ($obj | ConvertTo-Json -Depth 4) + [Environment]::NewLine
   [System.IO.File]::WriteAllText($ConfigFile, $json)
 }
 
@@ -163,9 +204,42 @@ if (Test-Path -LiteralPath $WeeklySrc) {
   Copy-Item -LiteralPath $WeeklySrc -Destination $WeeklyDest -Force
   Write-Host "  weekly review → $WeeklyDest"
 }
+if (Test-Path -LiteralPath $AmrUsageSrc) {
+  Copy-Item -LiteralPath $AmrUsageSrc -Destination $AmrUsageDest -Force
+  Write-Host "  usage helpers → $AmrUsageDest"
+}
+if (Test-Path -LiteralPath $AuditSrc) {
+  Copy-Item -LiteralPath $AuditSrc -Destination $AuditDest -Force
+  Write-Host "  audit → $AuditDest"
+}
+if (Test-Path -LiteralPath $ApplyRecSrc) {
+  Copy-Item -LiteralPath $ApplyRecSrc -Destination $ApplyRecDest -Force
+  Write-Host "  apply recommendations → $ApplyRecDest"
+}
+$ExamplesDest = Join-Path $AmrHome "examples"
+New-Item -ItemType Directory -Force -Path $ExamplesDest | Out-Null
+foreach ($map in @(
+  "cursor-tier-map.example.json",
+  "claude-tier-map.example.json",
+  "codex-tier-map.example.json",
+  "gemini-tier-map.example.json",
+  "config.example.json"
+)) {
+  $src = Join-Path $Root "integrations\$map"
+  if (Test-Path -LiteralPath $src) {
+    Copy-Item -LiteralPath $src -Destination (Join-Path $ExamplesDest $map) -Force
+  }
+}
 
 if (-not (Test-Path -LiteralPath $ConfigFile)) {
-  Write-Config -Cfg ([ordered]@{ openDashboardOnApply = $true; weeklyReview = $false })
+  Write-Config -Cfg ([ordered]@{
+    openDashboardOnApply = $true
+    weeklyReview = $false
+    auditOptIn = $false
+    hosts = @("cursor", "claude-code", "codex")
+    usageLogPath = ""
+    boundaryGatedConfirms = $false
+  })
   Write-Host "  created config → $ConfigFile"
 }
 
@@ -187,6 +261,12 @@ if ($EnableWeeklyReview) {
   Set-ConfigBool -Key "weeklyReview" -Value $true
 } elseif ($DisableWeeklyReview) {
   Set-ConfigBool -Key "weeklyReview" -Value $false
+}
+
+if ($EnableAudit) {
+  Set-ConfigBool -Key "auditOptIn" -Value $true
+} elseif ($DisableAudit) {
+  Set-ConfigBool -Key "auditOptIn" -Value $false
 }
 
 if ($UninstallSchedule) {
@@ -233,11 +313,33 @@ if (-not $ShouldOpen) {
   Write-Host "  Could not auto-open a browser. Open the dashboard path above manually,"
   Write-Host "  then click `"Load sample log`"."
 }
+if ($ApplyRecommendations) {
+  $cfg = Read-Config
+  if (-not $cfg.auditOptIn) {
+    Write-Host "  -ApplyRecommendations skipped: enable audit first (-EnableAudit)."
+  } elseif (Test-Path -LiteralPath $ApplyRecDest) {
+    Write-Host ""
+    Write-Host "Applying Savings Desk recommendations (local maps + boundary-gate flag)..."
+    & python $ApplyRecDest --dest $AmrHome
+  } else {
+    Write-Host "  apply_recommendations.py not installed; skip -ApplyRecommendations"
+  }
+}
+
 if ($cfg.weeklyReview) {
   Write-Host "  Weekly review: enabled (local usage log only — not vendor billing)."
   Write-Host "  Run: python $WeeklyDest --force"
 } else {
   Write-Host "  Weekly review: disabled (opt-in). Enable: .\scripts\apply.ps1 -EnableWeeklyReview"
+}
+if ($cfg.auditOptIn) {
+  Write-Host "  Savings Desk audit: enabled (local log only — not vendor billing)."
+  Write-Host "  Collected: tier, host, confirmed/overridden, task_kind, gate, timestamp."
+  Write-Host "  Never: prompts, code, secrets, vendor credentials, billing APIs."
+  Write-Host "  Run: python $AuditDest --force"
+  Write-Host "  Automate: python $ApplyRecDest"
+} else {
+  Write-Host "  Savings Desk audit: disabled (opt-in). Enable: .\scripts\apply.ps1 -EnableAudit"
 }
 Write-Host ""
 Write-Host "Note: Cursor/Claude loading SKILL.md alone cannot open a GUI."

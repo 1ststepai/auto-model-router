@@ -1,0 +1,19 @@
+{
+  "comment": "Gemini-style agent stub — optional peer host. Replace placeholders with your local model/effort labels. Not a Google Cloud billing API.",
+  "fast": {
+    "model": "<your-fast-gemini>",
+    "effort": "low"
+  },
+  "standard": {
+    "model": "<your-standard-gemini>",
+    "effort": "medium"
+  },
+  "reasoning": {
+    "model": "<your-reasoning-gemini>",
+    "effort": "high"
+  },
+  "max": {
+    "model": "<your-max-gemini>",
+    "effort": "max"
+  }
+}

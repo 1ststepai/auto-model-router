@@ -30,7 +30,7 @@ For a user-wide copy, use `~/.claude/skills/auto-model-router/SKILL.md` on macOS
 4. Select the configured Claude model or effort setting for that tier, then run.
 5. After a failed light attempt, state that you are escalating and continue with a stronger configured model/effort.
 
-Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project.
+Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project. Savings Desk can write a local stub at `~/.auto-model-router/claude-tier-map.json` from [`claude-tier-map.example.json`](claude-tier-map.example.json) after you opt in to the audit. Fill the placeholders; AMR does not call Anthropic billing APIs.
 
 ## Verify
 

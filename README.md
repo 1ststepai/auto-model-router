@@ -57,7 +57,18 @@ Plugin install does not open the savings dashboard. Use the apply script for tha
 .\scripts\apply.ps1 -Open
 ```
 
-This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
+This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`). Defaults include `openDashboardOnApply`, `weeklyReview`, `auditOptIn`, `hosts`, `usageLogPath`, and `boundaryGatedConfirms`. See [`integrations/config.example.json`](integrations/config.example.json).
+
+**Savings Desk** (opt-in local audit, then automation — not vendor billing):
+
+```bash
+./scripts/apply.sh --enable-audit --no-open
+python3 scripts/audit_usage.py --force
+python3 scripts/apply_recommendations.py --enable-weekly-review
+# Dashboard: ~/.auto-model-router/demo/dashboard.html  or  demo/dashboard.html
+```
+
+Consent is required before agents append `usage.jsonl`. Collected: tier, host, confirmed/overridden, task_kind. Never: prompts, code, secrets, vendor credentials. Apply writes local `cursor-tier-map.json` plus Claude/Codex stubs and sets the boundary-gated confirm flag. See [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md).
 
 **Optional weekly review** (local usage log only — not vendor billing):
 
@@ -114,7 +125,7 @@ python3 demo/savings_estimator.py demo/sample_usage_log.json
 # Optional: open demo/dashboard.html from the repo and load the sample log or paste your own JSON.
 ```
 
-This is not live billing or token accounting: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. Percentages are estimates from the supplied local log, not promises or measured vendor savings. After confirmed runs, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`INSTALL.md`](INSTALL.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
+This is not live billing or token accounting: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. Percentages are estimates from the supplied local log, not promises or measured vendor savings. After confirmed runs **and only if `auditOptIn` is true**, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim. See [`docs/STACK.md`](docs/STACK.md).
 
 ## Supported hosts
 
@@ -213,16 +224,24 @@ assets/logo-512.png                   # same 512×512 tile
 assets/auto-model-router-logo.png     # original neon upload
 SKILL.md                              # compatibility copy of the canonical skill
 skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
-scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
+scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review, --enable-audit)
 scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
+scripts/amr_usage.py                   # shared local-log helpers (no vendor APIs)
+scripts/audit_usage.py                 # Savings Desk audit (burns, confirm rate, relative units)
+scripts/apply_recommendations.py       # write local tier maps + boundary-gate flag
+scripts/context_budget_checklist.md    # optional context-lean pairing checklist
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md
+integrations/*-tier-map.example.json   # local host map stubs (fill your picker labels)
 demo/classify.py                       # offline heuristic checker
 demo/savings_estimator.py              # relative usage estimator
 demo/sample_usage_log.json             # fake demo routing log
-demo/dashboard.html                    # no-build local dashboard
+demo/dashboard.html                    # Savings Desk no-build local dashboard
+docs/SAVINGS_DESK.md                   # free skill vs paid desk (placeholders)
+docs/STACK.md                          # AMR + context lean + Savings Desk
+docs/boundary-gated-confirms.md        # confirm only at risk/ambiguity boundaries
 examples.md
 CONTRIBUTING.md
 SECURITY.md

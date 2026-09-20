@@ -37,7 +37,7 @@ An optional always-apply `.cursor/rules/auto-model-router.mdc` can point at the 
 4. Use Cursor's model picker and available effort controls to map the confirmed tier, then run.
 5. If the attempt is clearly too light, explain the escalation once and select a stronger configured option.
 
-Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill.
+Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill. Copy [`cursor-tier-map.example.json`](cursor-tier-map.example.json) to `~/.auto-model-router/cursor-tier-map.json` (or `.auto-model-router/cursor-tier-map.json` in a project) and replace the placeholders with **your** picker labels. Savings Desk `apply_recommendations.py` writes that stub after you opt in to the audit. AMR can *ask* you to switch; it does not flip the picker or read Cursor usage/quota APIs.
 
 ## Verify
 

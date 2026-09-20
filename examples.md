@@ -32,3 +32,5 @@ Agent: Auto suggests reasoning — unknown-root-cause auth debugging needs inves
 ```
 
 For mixed wording such as “draft a prototype redesign we can throw away,” reversible cues can bias toward a lighter tier. Security, irreversible actions, and a failed light attempt should still trigger escalation. These are expectations for a readable heuristic, not guarantees or a benchmark. Any usage benefit depends on the confirmed tier mapping and the option that actually runs.
+
+After you opt in to Savings Desk, the same decisions can be appended (without prompt text) to `usage.jsonl` and audited with `python3 scripts/audit_usage.py --force`. See [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md).

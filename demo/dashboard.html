@@ -3,177 +3,194 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Auto Model Router — Savings Estimator</title>
+  <title>Savings Desk — Auto Model Router</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { max-width: 980px; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.45; }
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, sans-serif;
+      --line: #8886;
+      --accent: #0f766e;
+    }
+    body { max-width: 1040px; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.45; }
     .banner { padding: 1rem 1.2rem; border: 2px solid #d97706; border-radius: .7rem; background: #fff7ed; color: #7c2d12; font-weight: 700; }
     @media (prefers-color-scheme: dark) { .banner { background: #431407; color: #fed7aa; } }
+    .consent { padding: .85rem 1rem; border: 1px solid var(--line); border-radius: .6rem; background: #0f766e14; }
     textarea { width: 100%; min-height: 10rem; box-sizing: border-box; font: .9rem ui-monospace, monospace; margin: .5rem 0; }
-    button, input { font: inherit; margin: .25rem .35rem .25rem 0; }
+    button, input, select { font: inherit; margin: .25rem .35rem .25rem 0; }
     button { cursor: pointer; padding: .45rem .8rem; border-radius: .4rem; border: 1px solid #888; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; margin: 1rem 0; }
-    .card { border: 1px solid #8886; border-radius: .6rem; padding: .8rem; }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button[disabled] { opacity: .55; cursor: not-allowed; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .7rem; margin: 1rem 0; }
+    .card { border: 1px solid var(--line); border-radius: .6rem; padding: .8rem; }
     .value { display: block; font-size: 1.55rem; font-weight: 750; }
-    .chart { display: grid; gap: .65rem; margin: 1rem 0 2rem; max-width: 700px; }
-    .row { display: grid; grid-template-columns: 95px 1fr 70px; align-items: center; gap: .6rem; }
+    .chart { display: grid; gap: .65rem; margin: 1rem 0 1.4rem; max-width: 720px; }
+    .row { display: grid; grid-template-columns: 110px 1fr 70px; align-items: center; gap: .6rem; }
     .track { height: 1.1rem; background: #8884; border-radius: .4rem; overflow: hidden; }
     .bar { height: 100%; border-radius: .4rem; }
     .fast { background: #22c55e; } .standard { background: #3b82f6; }
     .reasoning { background: #f59e0b; } .max { background: #ef4444; }
     pre { overflow: auto; padding: 1rem; background: #8882; border-radius: .5rem; }
     .muted { opacity: .78; }
+    .filters { display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; margin: .6rem 0 1rem; }
+    .filters label { display: inline-flex; gap: .35rem; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: .2rem .7rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+    th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
+    .cta, .pro { border: 1px dashed var(--line); border-radius: .7rem; padding: 1rem 1.1rem; margin: 1.2rem 0; }
+    .pro { border-style: solid; }
+    .pill { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border: 1px solid #888; border-radius: 999px; padding: .1rem .5rem; }
+    code, kbd { font-family: ui-monospace, monospace; }
+    h1 { margin-bottom: .35rem; }
+    .sub { margin-top: 0; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Auto Model Router savings estimator</h1>
-    <p class="banner">Estimates from your routing log, not live Cursor/Claude billing.</p>
-    <p>This uses example relative rates: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>. Percentages are estimates from the supplied local routing log, not measured vendor savings. It never accesses credentials, GUI state, tokens, or vendor billing APIs.</p>
-    <p class="muted">Use this alongside context tools such as <strong>lean.ctx</strong> or <strong>ponytail</strong>: those reduce context sent, while this router addresses model-tier overkill. It can help slow usage burn only when a confirmed lighter tier maps to a cheaper/faster model or lower effort and actually runs. No affiliation is implied, and no savings are guaranteed.</p>
+    <p class="pill">Savings Desk · local MVP</p>
+    <h1>Auto Model Router — Savings Desk</h1>
+    <p class="sub muted">Opt in to a local usage audit, then apply automation that writes host tier maps. Complements the skill; does not replace Cursor, Claude Code, Codex, or Gemini-style hosts.</p>
+    <p class="banner">Estimates from your routing log, not live Cursor/Claude/OpenAI/Gemini billing. No vendor meter is scraped.</p>
+    <div class="consent">
+      <strong>Consent / what is collected.</strong> Audit is off until <code>auditOptIn</code> is true in <code>~/.auto-model-router/config.json</code>.
+      Collected: <code>tier</code>, <code>host</code>, <code>confirmed</code>/<code>overridden</code>, <code>task_kind</code>, optional <code>gate</code> and <code>timestamp</code>.
+      <em>Never:</em> prompts, code, secrets, customer data, vendor credentials, or billing APIs.
+      Relative units: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>.
+    </div>
+    <p class="muted">AMR = model/effort discipline. Context lean tools (lean.ctx, ponytail, or yours) = send less context — optional peers, not bundled IP. Together they are a usage-discipline stack, not a savings guarantee. See <code>docs/STACK.md</code>.</p>
 
     <h2>Load a routing log</h2>
-    <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>.</p>
-    <button id="sample">Load sample log</button>
-    <input id="file" type="file" accept="application/json,.json">
-    <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>
+    <p>Load the included sample, choose a JSON/JSONL file, or paste an array of decisions. Optional <code>gate</code> (<code>auto_continue</code>, <code>confirm</code>, <code>hard_gate</code>) is kept for the desk and ignored by the raw estimator totals.</p>
+    <button id="sample" class="primary">Load sample log</button>
+    <input id="file" type="file" accept="application/json,.json,.jsonl,text/plain">
+    <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z","host":"cursor","task_kind":"rename"}]'></textarea>
     <br><button id="calculate">Calculate estimates</button>
     <span id="status" class="muted" role="status"></span>
 
     <section id="results" hidden>
-      <h2>Estimate</h2>
+      <h2>Hosts filter</h2>
+      <div id="filters" class="filters"></div>
+
+      <h2>Relative savings</h2>
       <div class="cards">
         <div class="card">Tasks<span id="tasks" class="value">—</span></div>
         <div class="card">Vs always-reasoning<span id="reasoning-saved" class="value">—</span></div>
         <div class="card">Vs always-max<span id="max-saved" class="value">—</span></div>
+        <div class="card">Confirm rate<span id="confirm" class="value">—</span></div>
         <div class="card">Override rate<span id="override" class="value">—</span></div>
+        <div class="card">Switch-downs<span id="switch-downs" class="value">—</span></div>
+        <div class="card">Heavy on light<span id="heavy-light" class="value">—</span></div>
       </div>
+
       <h3>Tasks by selected tier</h3>
       <div id="chart" class="chart"></div>
+
+      <h3>Burns by host</h3>
+      <div id="host-chart" class="chart"></div>
+      <table>
+        <thead><tr><th>Host</th><th>Tasks</th><th>Rel. units</th><th>fast</th><th>standard</th><th>reasoning</th><th>max</th></tr></thead>
+        <tbody id="host-table"></tbody>
+      </table>
+
+      <h3>Heavy-tier use on likely-light tasks</h3>
+      <p class="muted">Only when <code>task_kind</code> is present and looks light (rename, format, docs, …). Not inferred from prompts.</p>
+      <table>
+        <thead><tr><th>When</th><th>Host</th><th>Tier</th><th>task_kind</th></tr></thead>
+        <tbody id="heavy-table"></tbody>
+      </table>
+
+      <div class="cta" id="automation">
+        <h2>Enable automation</h2>
+        <p>After you opt in, apply recommendations writes local <code>cursor-tier-map.json</code> (plus Claude/Codex stubs), sets <code>boundaryGatedConfirms=true</code>, and can turn on the weekly digest. AMR still does not flip native Auto.</p>
+        <pre id="cta-commands">./scripts/apply.sh --enable-audit --no-open
+python3 scripts/audit_usage.py --force
+python3 scripts/apply_recommendations.py --enable-weekly-review</pre>
+        <button type="button" id="copy-cta">Copy commands</button>
+        <p class="muted">Next actions the CLI will spell out: enable boundary gates · map fast→X · turn on weekly digest.</p>
+      </div>
+
+      <section class="pro" aria-labelledby="pro-title">
+        <p class="pill">Savings Desk Pro · stub</p>
+        <h2 id="pro-title">Paid desk (not in this MVP)</h2>
+        <p><strong>Free here:</strong> opt-in local audit, CLI report, weekly digest, apply local maps, this dashboard.</p>
+        <p><strong>Paid placeholder:</strong> exportable report and team rollup. No checkout on this page — MIT open-core stays free.</p>
+        <button type="button" disabled title="Not available in the open MVP">Export report (Pro)</button>
+        <button type="button" disabled title="Not available in the open MVP">Team rollup (Pro)</button>
+        <p class="muted">Solo / team pricing TBD. Invoice or CSV reconcile is a later opt-in you would upload — never a silent vendor scrape.</p>
+      </section>
+
       <pre id="json"></pre>
     </section>
   </main>
 <script>
 const RATES = { fast: 1, standard: 3, reasoning: 8, max: 20 };
 const TIERS = ["fast", "standard", "reasoning", "max"];
+const LIGHT = new Set(["rename","format","lint","comment","docs","doc","summarize","summary","typo","list","factual","procedure","indent","boilerplate"]);
 const SAMPLE = [
-  {
-    "timestamp": "2026-09-14T09:12:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  },
-  {
-    "timestamp": "2026-09-14T10:05:00-04:00",
-    "tier": "standard",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  },
-  {
-    "timestamp": "2026-09-14T13:41:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "claude-code"
-  },
-  {
-    "timestamp": "2026-09-15T09:26:00-04:00",
-    "tier": "reasoning",
-    "confirmed": true,
-    "overridden": false,
-    "host": "claude-code"
-  },
-  {
-    "timestamp": "2026-09-15T11:18:00-04:00",
-    "tier": "standard",
-    "confirmed": true,
-    "overridden": true,
-    "suggested_tier": "fast",
-    "host": "codex"
-  },
-  {
-    "timestamp": "2026-09-15T15:02:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "codex"
-  },
-  {
-    "timestamp": "2026-09-16T08:47:00-04:00",
-    "tier": "standard",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  },
-  {
-    "timestamp": "2026-09-16T14:33:00-04:00",
-    "tier": "max",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  },
-  {
-    "timestamp": "2026-09-17T10:11:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "claude-code"
-  },
-  {
-    "timestamp": "2026-09-17T16:24:00-04:00",
-    "tier": "reasoning",
-    "confirmed": true,
-    "overridden": true,
-    "suggested_tier": "standard",
-    "host": "claude-code"
-  },
-  {
-    "timestamp": "2026-09-18T09:03:00-04:00",
-    "tier": "standard",
-    "confirmed": true,
-    "overridden": false,
-    "host": "codex"
-  },
-  {
-    "timestamp": "2026-09-18T12:56:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "codex"
-  },
-  {
-    "timestamp": "2026-09-19T11:37:00-04:00",
-    "tier": "reasoning",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  },
-  {
-    "timestamp": "2026-09-20T08:22:00-04:00",
-    "tier": "fast",
-    "confirmed": true,
-    "overridden": false,
-    "host": "cursor"
-  }
+  {"timestamp":"2026-09-14T09:12:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"cursor","task_kind":"rename","gate":"auto_continue"},
+  {"timestamp":"2026-09-14T10:05:00-04:00","tier":"standard","confirmed":true,"overridden":false,"host":"cursor","task_kind":"feature","gate":"auto_continue"},
+  {"timestamp":"2026-09-14T13:41:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"claude-code","task_kind":"format"},
+  {"timestamp":"2026-09-15T09:26:00-04:00","tier":"reasoning","confirmed":true,"overridden":false,"host":"claude-code","task_kind":"security","gate":"hard_gate"},
+  {"timestamp":"2026-09-15T11:18:00-04:00","tier":"standard","confirmed":true,"overridden":true,"suggested_tier":"fast","host":"codex","task_kind":"feature"},
+  {"timestamp":"2026-09-15T15:02:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"codex","task_kind":"summarize"},
+  {"timestamp":"2026-09-16T08:47:00-04:00","tier":"standard","confirmed":true,"overridden":false,"host":"cursor","task_kind":"feature"},
+  {"timestamp":"2026-09-16T14:33:00-04:00","tier":"max","confirmed":true,"overridden":false,"host":"cursor","task_kind":"docs"},
+  {"timestamp":"2026-09-17T10:11:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"claude-code","task_kind":"comment"},
+  {"timestamp":"2026-09-17T16:24:00-04:00","tier":"reasoning","confirmed":true,"overridden":true,"suggested_tier":"standard","host":"claude-code","task_kind":"debug"},
+  {"timestamp":"2026-09-18T09:03:00-04:00","tier":"standard","confirmed":true,"overridden":false,"host":"codex","task_kind":"feature"},
+  {"timestamp":"2026-09-18T12:56:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"codex","task_kind":"rename"},
+  {"timestamp":"2026-09-19T11:37:00-04:00","tier":"reasoning","confirmed":true,"overridden":false,"host":"cursor","task_kind":"architecture"},
+  {"timestamp":"2026-09-20T08:22:00-04:00","tier":"fast","confirmed":true,"overridden":false,"host":"cursor","task_kind":"format"}
 ];
 const $ = (id) => document.getElementById(id);
+const RANK = Object.fromEntries(TIERS.map((t, i) => [t, i]));
+let ALL_ROWS = [];
+let SELECTED_HOSTS = new Set();
+
 function entries(payload) {
   if (Array.isArray(payload)) return payload;
   for (const key of ["decisions", "usage", "log", "entries"]) if (Array.isArray(payload[key])) return payload[key];
   throw new Error("JSON must be an array or contain decisions/usage/log/entries");
 }
-function calculate(payload) {
-  const rows = entries(payload);
+function parseInput(text) {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("The routing log is empty");
+  try { return entries(JSON.parse(trimmed)); }
+  catch (first) {
+    const rows = [];
+    for (const line of trimmed.split(/\r?\n/)) {
+      const bit = line.trim();
+      if (!bit) continue;
+      rows.push(JSON.parse(bit));
+    }
+    if (!rows.length) throw first;
+    return rows;
+  }
+}
+function calculate(rows) {
   if (!rows.length) throw new Error("The routing log is empty");
   const counts = Object.fromEntries(TIERS.map(t => [t, 0]));
-  let units = 0, overrides = 0;
+  const hosts = {};
+  let units = 0, overrides = 0, confirmed = 0, switchDowns = 0, switchUps = 0;
+  const heavy = [];
   rows.forEach((row, i) => {
     if (!row || !TIERS.includes(row.tier)) throw new Error(`Entry ${i + 1} has an invalid tier`);
     counts[row.tier]++;
     units += RATES[row.tier];
     if (row.overridden === true) overrides++;
+    if (row.confirmed === true) confirmed++;
+    const host = (row.host || "unspecified") + "";
+    hosts[host] = hosts[host] || { count: 0, units: 0, tasks_by_tier: Object.fromEntries(TIERS.map(t => [t, 0])) };
+    hosts[host].count++;
+    hosts[host].units += RATES[row.tier];
+    hosts[host].tasks_by_tier[row.tier]++;
+    const suggested = row.suggested_tier;
+    if (TIERS.includes(suggested)) {
+      if (RANK[row.tier] < RANK[suggested]) switchDowns++;
+      if (RANK[row.tier] > RANK[suggested]) switchUps++;
+    }
+    const kind = (row.task_kind || "").toLowerCase();
+    if ((row.tier === "reasoning" || row.tier === "max") && LIGHT.has(kind)) {
+      heavy.push({ timestamp: row.timestamp || "", host, tier: row.tier, task_kind: kind });
+    }
   });
   const alwaysReasoning = rows.length * RATES.reasoning;
   const alwaysMax = rows.length * RATES.max;
@@ -183,29 +200,76 @@ function calculate(payload) {
     example_rates: RATES,
     task_count: rows.length,
     tasks_by_tier: counts,
+    confirmed_count: confirmed,
+    confirm_rate_pct: Math.round(confirmed / rows.length * 1000) / 10,
     override_count: overrides,
     override_rate_pct: Math.round(overrides / rows.length * 1000) / 10,
+    switch_down_count: switchDowns,
+    switch_up_count: switchUps,
+    heavy_on_light: heavy,
+    heavy_on_light_count: heavy.length,
+    burns_by_host: hosts,
     routed_relative_units: units,
     always_reasoning_relative_units: alwaysReasoning,
     always_max_relative_units: alwaysMax,
     estimated_savings_vs_always_reasoning_pct: pct(alwaysReasoning),
-    estimated_savings_vs_always_max_pct: pct(alwaysMax)
+    estimated_savings_vs_always_max_pct: pct(alwaysMax),
+    billing_api_accessed: false
   };
 }
-function render(payload) {
-  const result = calculate(payload);
+function uniqueHosts(rows) {
+  return [...new Set(rows.map(r => (r.host || "unspecified") + ""))].sort();
+}
+function filteredRows() {
+  if (!SELECTED_HOSTS.size) return ALL_ROWS;
+  return ALL_ROWS.filter(r => SELECTED_HOSTS.has((r.host || "unspecified") + ""));
+}
+function renderFilters() {
+  const hosts = uniqueHosts(ALL_ROWS);
+  $("filters").innerHTML = hosts.map(h => {
+    const checked = !SELECTED_HOSTS.size || SELECTED_HOSTS.has(h) ? "checked" : "";
+    return `<label><input type="checkbox" data-host="${h}" ${checked}>${h}</label>`;
+  }).join("") + (hosts.length ? `<button type="button" id="hosts-all">All hosts</button>` : "<span class='muted'>No host fields in this log.</span>");
+  $("filters").querySelectorAll("input[data-host]").forEach(input => {
+    input.addEventListener("change", () => {
+      const on = [...$("filters").querySelectorAll("input[data-host]:checked")].map(el => el.dataset.host);
+      SELECTED_HOSTS = on.length === hosts.length ? new Set() : new Set(on);
+      paint();
+    });
+  });
+  const all = $("hosts-all");
+  if (all) all.addEventListener("click", () => { SELECTED_HOSTS = new Set(); renderFilters(); paint(); });
+}
+function paint() {
+  const result = calculate(filteredRows());
   $("results").hidden = false;
   $("tasks").textContent = result.task_count;
   $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct + "%";
   $("max-saved").textContent = result.estimated_savings_vs_always_max_pct + "%";
+  $("confirm").textContent = result.confirm_rate_pct + "%";
   $("override").textContent = result.override_rate_pct + "%";
+  $("switch-downs").textContent = result.switch_down_count;
+  $("heavy-light").textContent = result.heavy_on_light_count;
   const maxCount = Math.max(...Object.values(result.tasks_by_tier), 1);
   $("chart").innerHTML = TIERS.map(t => `<div class="row"><strong>${t}</strong><div class="track"><div class="bar ${t}" style="width:${result.tasks_by_tier[t] / maxCount * 100}%"></div></div><span>${result.tasks_by_tier[t]}</span></div>`).join("");
+  const hostEntries = Object.entries(result.burns_by_host);
+  const maxUnits = Math.max(...hostEntries.map(([, s]) => s.units), 1);
+  $("host-chart").innerHTML = hostEntries.map(([h, s]) => `<div class="row"><strong>${h}</strong><div class="track"><div class="bar standard" style="width:${s.units / maxUnits * 100}%"></div></div><span>${s.units}</span></div>`).join("") || "<p class='muted'>No host field on these rows.</p>";
+  $("host-table").innerHTML = hostEntries.map(([h, s]) => `<tr><td>${h}</td><td>${s.count}</td><td>${s.units}</td>${TIERS.map(t => `<td>${s.tasks_by_tier[t]}</td>`).join("")}</tr>`).join("");
+  $("heavy-table").innerHTML = result.heavy_on_light.length
+    ? result.heavy_on_light.map(r => `<tr><td>${r.timestamp || "—"}</td><td>${r.host}</td><td>${r.tier}</td><td>${r.task_kind}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="muted">None (or task_kind was not logged).</td></tr>`;
   $("json").textContent = JSON.stringify(result, null, 2);
-  $("status").textContent = " Loaded successfully.";
+}
+function render(rows) {
+  ALL_ROWS = rows;
+  SELECTED_HOSTS = new Set();
+  renderFilters();
+  paint();
+  $("status").textContent = " Loaded successfully. Local estimates only.";
 }
 function loadText(text) {
-  try { render(JSON.parse(text)); }
+  try { render(parseInput(text)); }
   catch (error) { $("status").textContent = " Error: " + error.message; $("results").hidden = true; }
 }
 $("sample").addEventListener("click", async () => {
@@ -228,6 +292,16 @@ $("file").addEventListener("change", event => {
   const reader = new FileReader();
   reader.onload = () => { $("input").value = reader.result; loadText(reader.result); };
   reader.readAsText(file);
+});
+$("copy-cta").addEventListener("click", async () => {
+  const text = $("cta-commands").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    $("copy-cta").textContent = "Copied";
+    setTimeout(() => { $("copy-cta").textContent = "Copy commands"; }, 1500);
+  } catch (_) {
+    $("copy-cta").textContent = "Copy from the box above";
+  }
 });
 $("sample").click();
 </script>
