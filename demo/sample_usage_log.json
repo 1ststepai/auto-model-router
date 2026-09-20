@@ -1,8 +1,8 @@
 [
-  {"timestamp": "2026-09-14T09:12:00-04:00", "tier": "fast", "confirmed": true, "overridden": false, "host": "cursor"},
-  {"timestamp": "2026-09-14T10:05:00-04:00", "tier": "standard", "confirmed": true, "overridden": false, "host": "cursor"},
+  {"timestamp": "2026-09-14T09:12:00-04:00", "tier": "fast", "confirmed": true, "overridden": false, "host": "cursor", "gate": "auto_continue"},
+  {"timestamp": "2026-09-14T10:05:00-04:00", "tier": "standard", "confirmed": true, "overridden": false, "host": "cursor", "gate": "auto_continue"},
   {"timestamp": "2026-09-14T13:41:00-04:00", "tier": "fast", "confirmed": true, "overridden": false, "host": "claude-code"},
-  {"timestamp": "2026-09-15T09:26:00-04:00", "tier": "reasoning", "confirmed": true, "overridden": false, "host": "claude-code"},
+  {"timestamp": "2026-09-15T09:26:00-04:00", "tier": "reasoning", "confirmed": true, "overridden": false, "host": "claude-code", "gate": "hard_gate"},
   {"timestamp": "2026-09-15T11:18:00-04:00", "tier": "standard", "confirmed": true, "overridden": true, "suggested_tier": "fast", "host": "codex"},
   {"timestamp": "2026-09-15T15:02:00-04:00", "tier": "fast", "confirmed": true, "overridden": false, "host": "codex"},
   {"timestamp": "2026-09-16T08:47:00-04:00", "tier": "standard", "confirmed": true, "overridden": false, "host": "cursor"},

@@ -4,7 +4,7 @@
 
 Auto Model Router is a portable instruction skill and a small local heuristic demo. It does not make security decisions, enforce permissions, sandbox an agent, or guarantee safe model selection. Treat the tier suggestion as a workflow aid, not a security control.
 
-The heuristic intentionally routes authentication, secrets, irreversible actions, and other security-sensitive work toward stronger reasoning, but users and host safeguards remain responsible for review and authorization.
+The heuristic intentionally routes authentication, secrets, irreversible actions, and other security-sensitive work toward stronger reasoning and a hard confirm gate, but users and host safeguards remain responsible for review and authorization. The confirm gate is a workflow aid, not an enforcement layer.
 
 ## Secrets and sensitive data
 

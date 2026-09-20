@@ -33,7 +33,7 @@
     <p class="muted">Use this alongside context tools such as <strong>lean.ctx</strong> or <strong>ponytail</strong>: those reduce context sent, while this router addresses model-tier overkill. It can help slow usage burn only when a confirmed lighter tier maps to a cheaper/faster model or lower effort and actually runs. No affiliation is implied, and no savings are guaranteed.</p>
 
     <h2>Load a routing log</h2>
-    <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>.</p>
+    <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>. Optional <code>gate</code> (<code>auto_continue</code>, <code>confirm</code>, <code>hard_gate</code>) is ignored by the estimator.</p>
     <button id="sample">Load sample log</button>
     <input id="file" type="file" accept="application/json,.json">
     <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>

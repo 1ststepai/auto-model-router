@@ -2,7 +2,7 @@
 
 This repository is an agent behavior skill. Install it as a **plugin** from this GitHub repo (preferred when your host supports marketplace install) or copy the skill with the apply script. When you want the policy on every request, add the optional host rule or instruction file described below.
 
-Plugin or skill install loads the suggest → confirm policy. It does **not** change Cursor, Claude Code, or Codex billing APIs, and it does **not** guarantee savings.
+Plugin or skill install loads the suggest → boundary-gated confirm policy. It does **not** change Cursor, Claude Code, or Codex billing APIs, and it does **not** guarantee savings.
 
 ## Install as a plugin
 
@@ -151,9 +151,9 @@ To run truly weekly without thinking about it, use your OS scheduler — **nothi
 
 ## What this does not do
 
-This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier suggestion, waits for confirmation or an override, and then uses the host's model picker or effort setting. A host's native Auto mode can still make its own choice unless you change that host setting.
+This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier suggestion, auto-continues only when the work is clearly light and reversible, and otherwise waits for confirmation or an override before using the host's model picker or effort setting. A host's native Auto mode can still make its own choice unless you change that host setting.
 
-If you are running out of usage or burning tokens, this targets **model overkill**: suggest a lighter tier when it is sufficient, then confirm before substantial work. It can help slow usage burn only when that confirmed tier is mapped to a cheaper/faster model or lower effort and that option actually runs. Tools such as **lean.ctx** and **ponytail** are complementary peers—not competitors and not affiliated with this project—that reduce how much context you send; this skill does not shrink context or guarantee savings. Together they form a usage-discipline stack, not a promise of measured Cursor/Claude/Codex quota reduction.
+If you are running out of usage or burning tokens, this targets **model overkill**: suggest a lighter tier when it is sufficient, auto-continue the obvious reversible cases, and confirm when the choice is risky, ambiguous, or near a tier boundary. It can help slow usage burn only when that authorized tier is mapped to a cheaper/faster model or lower effort and that option actually runs. Tools such as **lean.ctx** and **ponytail** are complementary peers—not competitors and not affiliated with this project—that reduce how much context you send; this skill does not shrink context or guarantee savings. Together they form a usage-discipline stack, not a promise of measured Cursor/Claude/Codex quota reduction.
 
 ## Quick start (about 60 seconds)
 
@@ -173,13 +173,17 @@ mkdir -p .agents/skills/auto-model-router
 cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .agents/skills/auto-model-router/SKILL.md
 ```
 
-For a user-wide install, follow the host-specific paths below. Then **start a new chat/session**, ask for a moderate task without naming a model, and look for a line like:
+For a user-wide install, follow the host-specific paths below. Then **start a new chat/session**. A clear rename should auto-continue; a high-risk or mixed task should wait:
 
 ```text
-Auto suggests standard — this multi-file routine change fits the standard tier. Confirm to run, or override: fast, standard, reasoning, or max.
+Auto continues on fast — clear bounded rename.
 ```
 
-Confirm (or override) before allowing the agent to edit. If the host cannot pause, the suggestion must still appear and your next instruction acts as confirmation.
+```text
+Auto suggests reasoning — security-sensitive review must not be under-provisioned. Confirm required (high-risk / hard to undo), or override: fast, standard, reasoning, or max.
+```
+
+If the host cannot pause when a wait is required, the suggestion must still appear and your next instruction acts as confirmation.
 
 ## Cursor
 
@@ -234,14 +238,15 @@ If the skill is present in the project, create `.cursor/rules/auto-model-router.
 
 ```md
 ---
-description: Ask for a tier confirmation before substantial model-dependent work
+description: Apply boundary-gated Auto model routing before model-dependent work
 alwaysApply: true
 ---
 
 Before substantial work or an open model/effort choice, read and follow
-`.cursor/skills/auto-model-router/SKILL.md`. Show the required Auto suggests
-line, wait for confirmation or an override, then use Cursor's model picker.
-Honor any explicit model, provider, effort, or tier choice.
+`.cursor/skills/auto-model-router/SKILL.md`. Show the required Auto line.
+Auto-continue only when the skill's gate allows it; otherwise wait for
+confirmation or an override, then use Cursor's model picker. Honor any
+explicit model, provider, effort, or tier choice.
 ```
 
 The rule makes the behavior more discoverable; it does not take control of Cursor's native Auto picker. If you use only a user-wide skill, install an equivalent user-wide rule if your Cursor version supports user rules, or rely on the skill's description and invoke it in the chat.
@@ -249,9 +254,8 @@ The rule makes the behavior more discoverable; it does not take control of Curso
 ### Verify in Cursor
 
 1. Open a **new Agent chat** in the project (or restart Cursor after a user-wide install).
-2. Ask for a mid-weight task, such as: “Add a small validation helper and its tests to this project.” Do not name a model.
-3. Before editing, Agent should show `Auto suggests <tier> — <reason>. Confirm to run, or override...`.
-4. Reply `confirm` or choose another tier. The agent should then use the mapped Cursor picker/effort setting.
+2. Ask for a clear rename (should print `Auto continues on fast — ...` and start) and a security-sensitive or mixed-boundary task (should wait).
+3. For a wait, reply `confirm` or choose another tier. The agent should then use the mapped Cursor picker/effort setting.
 
 ## Claude Code
 
@@ -310,7 +314,7 @@ Keep the include and skill in the repository for cloud use. Do not paste a secon
 
 ### Verify in Claude Code
 
-Start a new Claude Code session after a new top-level skills directory is created. Ask the same kind of mid-weight task without specifying a model or effort. Claude should present the `Auto suggests ... Confirm to run, or override...` line before changing files; reply `confirm` or override explicitly.
+Start a new Claude Code session after a new top-level skills directory is created. Ask for a clear rename (auto-continue) and a security-sensitive or mixed-boundary task (wait for `confirm` or an override) without specifying a model or effort.
 
 ## Codex
 
@@ -320,8 +324,9 @@ Codex reads `AGENTS.md` before work. Add a clearly marked section to the project
 ## Auto model routing
 
 Before substantial work or an open model/effort choice, read and follow
-`.agents/skills/auto-model-router/SKILL.md`. Show the Auto suggests line and
-wait for confirmation or an explicit override before editing.
+`.agents/skills/auto-model-router/SKILL.md`. Show the Auto line. Auto-continue
+only when the skill's gate allows it; otherwise wait for confirmation or an
+explicit override before editing.
 ```
 
 If Agent Skills are enabled, the current repository/user locations are:
@@ -349,7 +354,7 @@ Some older or configured Codex installations also scan `$CODEX_HOME/skills` (nor
 
 ### Verify in Codex
 
-Start a new Codex run/session so `AGENTS.md` and the skill are read. Ask for a moderate task without selecting a model or reasoning effort. Before making changes, Codex should print the suggestion line and wait for `confirm` or an explicit override. If a TUI session loads instructions only at startup, fully restart it after changing `AGENTS.md`.
+Start a new Codex run/session so `AGENTS.md` and the skill are read. Ask for a clear rename (auto-continue) and a security-sensitive or mixed-boundary task without selecting a model or reasoning effort. High-risk and near-boundary work should wait for `confirm` or an explicit override. If a TUI session loads instructions only at startup, fully restart it after changing `AGENTS.md`.
 
 ## Savings estimator (optional)
 
@@ -366,10 +371,10 @@ You can pass a JSON list of task strings (the demo classifies them) or a decisio
 Put the contents of [`SKILL.md`](SKILL.md) in the agent's custom/system/project instructions or its supported skill directory. If it supports a repository instruction file, commit the policy there. Map the neutral tiers to the available model or effort controls, and preserve this contract:
 
 ```text
-context → classify → suggest → confirm/override → run → escalate if needed
+context → classify → suggest → boundary-gated confirm/override → run → escalate if needed
 ```
 
-If the host has no model control, still display the suggestion and ask for confirmation; do not claim that the host switched models.
+If the host has no model control, still display the suggestion; wait when the gate requires confirm; do not claim that the host switched models.
 
 ## Cloud and background agents
 
@@ -387,7 +392,7 @@ Commit the files and confirm that the cloud agent checks out the same branch/com
 
 ## Verify the complete flow
 
-Use a new chat/session and a mid-weight request with no explicit model choice. You should see a suggestion and reason **before coding**, followed by a confirmation request. Confirm it, or override with `fast`, `standard`, `reasoning`, `max`, or a host model/effort. The agent should then work with the mapped setting and mention a one-time escalation if the chosen tier proves insufficient.
+Use a new chat/session. A clear rename should print `Auto continues on <tier> — ...` and start. A security-sensitive, irreversible, near-boundary, or ambiguous request should show a suggestion **before coding** and wait. Confirm it, or override with `fast`, `standard`, `reasoning`, `max`, or a host model/effort. After a failed light attempt the agent should stop for confirm once before escalating.
 
 ## Troubleshooting
 
@@ -401,11 +406,11 @@ Check the exact path, spelling, and required filename `SKILL.md`; keep it inside
 
 ### The agent works but stays silent
 
-Check that you installed the optional Cursor rule or added the relevant `AGENTS.md`/`CLAUDE.md` instruction. A skill may be discovered but invoked only when relevant. Ask explicitly: “Apply the auto-model-router policy and suggest a tier before editing.”
+Check that you installed the optional Cursor rule or added the relevant `AGENTS.md`/`CLAUDE.md` instruction. A skill may be discovered but invoked only when relevant. Ask explicitly: “Apply the auto-model-router policy and suggest a tier before editing.” A clear rename that auto-continues is working as designed; it should still print the one-line notice.
 
 ### Cursor's Auto still chooses silently
 
-That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker or force a provider/model change. Verify that the agent itself printed the suggestion and waited for your confirmation; then choose the mapped model/effort in Cursor if needed.
+That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker or force a provider/model change. Verify that the agent itself printed the Auto line; it should wait when the gate requires confirm, and may auto-continue a clear rename. Then choose the mapped model/effort in Cursor if needed.
 
 ### Cloud cannot find it
 

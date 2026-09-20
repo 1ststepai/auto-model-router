@@ -6,14 +6,14 @@ Thanks for helping make Auto Model Router clearer, safer, and more useful across
 
 1. Read [`README.md`](README.md), [`INSTALL.md`](INSTALL.md), and [`SKILL.md`](SKILL.md).
 2. Keep the project provider-agnostic: use `fast`, `standard`, `reasoning`, and `max`, not a vendor's current model names.
-3. Preserve the core UX: **context → classify → suggest → confirm/override → run → escalate**.
+3. Preserve the core UX: **context → classify → suggest → boundary-gated confirm/override → run → escalate**. Do not revert to always-confirm on every call (confirm-fatigue). Do not auto-continue high-risk or near-boundary work.
 4. Be explicit that the rubric is a transparent heuristic, not ML or a security control.
 
 ## Improve the rubric
 
 - Add or refine readable patterns in `demo/classify.py`.
-- Add a representative input and expected tier to `EXAMPLES` in the same file.
-- Update [`examples.md`](examples.md) when the user-facing rubric changes.
+- Add a representative input and expected tier **and gate** to `EXAMPLES` in the same file.
+- Update [`examples.md`](examples.md) and [`docs/boundary-gated-confirms.md`](docs/boundary-gated-confirms.md) when the user-facing rubric or confirm gate changes.
 - Prefer a false-positive-resistant signal over a clever opaque rule. Keep explicit model/provider/effort choices as overrides.
 - Run the example suite and inspect both the suggestion line and JSON output.
 - Keep `demo/sample_usage_log.json`, `demo/savings_estimator.py`, and `demo/dashboard.html` honest about example rates and non-live data.

@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "auto-model-router",
   "version": "1.0.0",
-  "description": "A transparent, user-confirmed policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
+  "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
   "author": {
     "name": "1ststepai",
     "url": "https://github.com/1ststepai"
@@ -21,8 +21,8 @@
     "com.openai": {
       "interface": {
         "displayName": "Auto Model Router",
-        "shortDescription": "Suggest a model/effort tier, then wait for confirm or override.",
-        "longDescription": "Loads the portable auto-model-router skill: classify each task as fast, standard, reasoning, or max, show the suggestion, and wait for confirmation or an override before substantial work. Does not change vendor billing APIs or guarantee savings.",
+        "shortDescription": "Suggest a model/effort tier; auto-continue clear work, confirm at boundaries.",
+        "longDescription": "Loads the portable auto-model-router skill: classify each task as fast, standard, reasoning, or max, show the suggestion, auto-continue clear reversible work, and wait for confirmation at tier boundaries and high-risk actions. Does not change vendor billing APIs or guarantee savings.",
         "developerName": "1ststepai",
         "category": "Productivity",
         "websiteURL": "https://github.com/1ststepai/auto-model-router",

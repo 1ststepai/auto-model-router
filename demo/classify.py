@@ -19,6 +19,14 @@ max        Research-level / large redesign / hardest judgment.
 Backward-compatible aliases (accepted as expected labels in tests only via
 normalize): low→fast, high→reasoning, frontier→max.
 
+Confirm gate (heuristic, not ML)
+--------------------------------
+hard_gate      Must wait: security/secrets/auth, purchases, sends, irreversible.
+auto_continue  Do not block: clearly fast (or strongly-fitting standard),
+               reversible, not near a tier boundary, user did not demand confirm.
+confirm        Wait: near-boundary, ambiguous/architecture, high-risk, or
+               escalation after a failed light attempt.
+
 Usage
 -----
   echo "rename foo to bar" | python3 classify.py
@@ -77,6 +85,66 @@ MAX_PATTERNS: List[Tuple[str, str]] = [
     (r"\b(multi[- ]agent orchestration|distributed consensus from scratch)\b", "very hard systems design"),
 ]
 
+# Irreversible / high-risk cues that always hard-gate (also keep tier at least reasoning)
+HARD_GATE_PATTERNS: List[Tuple[str, str]] = [
+    (
+        r"\b(secur(e|ity)|auth(entication|orization)?|vulnerabilit|xss|csrf|injection|secret|credential|password|api[- ]?key)\b",
+        "security/secrets/auth",
+    ),
+    (r"\b(purchas\w*|process( a| the)? payment|charge the customer|buy now)\b", "purchase/payment"),
+    (
+        r"\b(send (an? )?(email|sms|newsletter)|email (all |every )?customers|notify (all )?customers)\b",
+        "irreversible send",
+    ),
+    (
+        r"\b(deploy to prod(uction)?|drop (the )?(table|database)|delete production|force[- ]push)\b",
+        "irreversible external action",
+    ),
+]
+
+USER_CONFIRM_PATTERNS: List[Tuple[str, str]] = [
+    (
+        r"\b(choose carefully|pick carefully|confirm (first|before)|ask me (first|before)|"
+        r"wait for (my )?confirm|don'?t auto-?continue|require confirm)\b",
+        "user requested confirm",
+    ),
+]
+
+ESCALATION_PATTERNS: List[Tuple[str, str]] = [
+    (
+        r"\b((light|fast) attempt (failed|did not work)|failed light attempt|"
+        r"that didn'?t work[,.]? try (again|a stronger|reasoning|max)|escalate (to|after))\b",
+        "escalation after failed light attempt",
+    ),
+]
+
+# Labels that count as easy-undo / no side-effect work for the confirm gate
+REVERSIBLE_SIGNAL_LABELS = {
+    "formatting/rename procedure",
+    "short summarization",
+    "short factual question",
+    "trivial edit",
+    "single-file scope",
+    "listing/enumeration",
+    "clear procedure given",
+    "straightforward conversion",
+    "multi-file edits",
+    "known patterns",
+    "known-pattern propagation",
+    "routine feature of known shape",
+    "moderate debug with clues",
+}
+
+TIER_ORDER = ("fast", "standard", "reasoning", "max")
+HARD_GATE_LABELS = {
+    "security-sensitive",
+    "security/secrets/auth",
+    "purchase/payment",
+    "irreversible send",
+    "irreversible external action",
+}
+CLEAR_STANDARD_MIN_CONFIDENCE = 0.7
+
 # Soft length / complexity cues
 WORD_COUNT_REASONING = 80
 WORD_COUNT_MAX = 200
@@ -99,6 +167,71 @@ def _match_signals(text: str, patterns: List[Tuple[str, str]]) -> List[str]:
     return found
 
 
+def _families_present(fast_s: List[str], std_s: List[str], reason_s: List[str], max_s: List[str]) -> List[str]:
+    return [
+        name
+        for name, hits in (
+            ("fast", fast_s),
+            ("standard", std_s),
+            ("reasoning", reason_s),
+            ("max", max_s),
+        )
+        if hits
+    ]
+
+
+def _adjacent_families(families: List[str]) -> bool:
+    idxs = [TIER_ORDER.index(f) for f in families]
+    return any(abs(a - b) == 1 for i, a in enumerate(idxs) for b in idxs[i + 1 :])
+
+
+def _is_reversible(task: str, matched_labels: List[str], high_risk: bool) -> bool:
+    """Easy-undo / no side-effect work. High-risk actions are never treated as reversible."""
+    if high_risk:
+        return False
+    if re.search(
+        r"\b(draft|prototype|try|experiment|reversible|can undo|easy undo|dry[- ]run|local edit)\b",
+        task,
+        re.I,
+    ):
+        return True
+    return any(label in REVERSIBLE_SIGNAL_LABELS for label in matched_labels)
+
+
+def decide_gate(
+    *,
+    tier: str,
+    high_risk: bool,
+    reversible: bool,
+    near_boundary: bool,
+    user_requested_confirm: bool,
+    escalation: bool,
+    confidence: float,
+    families: List[str],
+) -> Tuple[str, str]:
+    """Return (gate, gate_reason). Honest rubric — not a learned model."""
+    if high_risk:
+        return "hard_gate", "security-sensitive, secrets/auth, purchase, send, or irreversible action"
+    if user_requested_confirm:
+        return "confirm", "user asked Auto to choose carefully / confirm first"
+    if escalation:
+        return "confirm", "escalation after a failed light attempt"
+    if near_boundary:
+        return "confirm", "signals sit near a tier boundary"
+    if tier in ("reasoning", "max"):
+        return "confirm", "ambiguous, architectural, or high-judgment work"
+    if tier == "fast" and reversible:
+        return "auto_continue", "clear fast reversible work"
+    if (
+        tier == "standard"
+        and reversible
+        and families == ["standard"]
+        and confidence >= CLEAR_STANDARD_MIN_CONFIDENCE
+    ):
+        return "auto_continue", "clear standard fit; reversible local work"
+    return "confirm", "not a clear auto-continue case"
+
+
 def classify(task: str) -> dict:
     """Return tier / reason / signals / confidence for a task description."""
     task = (task or "").strip()
@@ -108,6 +241,11 @@ def classify(task: str) -> dict:
             "reason": "Empty task; defaulting to lightest tier.",
             "signals": ["empty input"],
             "confidence": 0.3,
+            "reversible": False,
+            "high_risk": False,
+            "near_boundary": True,
+            "gate": "confirm",
+            "gate_reason": "empty or unspecified task; not a clear auto-continue case",
         }
 
     words = len(task.split())
@@ -115,6 +253,9 @@ def classify(task: str) -> dict:
     std_s = _match_signals(task, STANDARD_PATTERNS)
     reason_s = _match_signals(task, REASONING_PATTERNS)
     max_s = _match_signals(task, MAX_PATTERNS)
+    hard_s = _match_signals(task, HARD_GATE_PATTERNS)
+    user_confirm_s = _match_signals(task, USER_CONFIRM_PATTERNS)
+    escalation_s = _match_signals(task, ESCALATION_PATTERNS)
 
     signals: List[str] = []
     if words >= WORD_COUNT_MAX:
@@ -224,27 +365,88 @@ def classify(task: str) -> dict:
     if not signals:
         signals = ["no patterned signals"]
 
+    high_risk = bool(hard_s) or any(label in HARD_GATE_LABELS for label in reason_s)
+    if high_risk:
+        for label in hard_s:
+            if label not in signals:
+                signals.append(label)
+        if tier in ("fast", "standard"):
+            tier = "reasoning"
+            reason = (
+                "Security-sensitive or irreversible external action; "
+                "never under-provision (at least reasoning)."
+            )
+            conf = max(conf, 0.7)
+            signals.append("high-risk → at least reasoning")
+
+    families = _families_present(fast_s, std_s, reason_s, max_s)
+    mixed_decision = any(
+        s.startswith("mixed") or s.startswith("reversible —") or "mixed +" in s
+        for s in signals
+    )
+    # Honest heuristic: two+ families, or a mixed-signal decision, means adjacent-tier ambiguity.
+    near_boundary = bool(len(families) >= 2 or mixed_decision)
+    if near_boundary and "near-boundary / ambiguous families" not in signals:
+        signals.append("near-boundary / ambiguous families")
+
+    reversible = _is_reversible(task, fast_s + std_s + signals, high_risk)
+    user_requested_confirm = bool(user_confirm_s)
+    escalation = bool(escalation_s)
+    if user_requested_confirm:
+        signals.extend(label for label in user_confirm_s if label not in signals)
+    if escalation:
+        signals.extend(label for label in escalation_s if label not in signals)
+
+    gate, gate_reason = decide_gate(
+        tier=tier,
+        high_risk=high_risk,
+        reversible=reversible,
+        near_boundary=near_boundary,
+        user_requested_confirm=user_requested_confirm,
+        escalation=escalation,
+        confidence=round(conf, 2),
+        families=families,
+    )
+
     return {
         "tier": tier,
         "reason": reason,
         "signals": signals,
         "confidence": round(conf, 2),
+        "reversible": reversible,
+        "high_risk": high_risk,
+        "near_boundary": near_boundary,
+        "gate": gate,
+        "gate_reason": gate_reason,
     }
 
 
-EXAMPLES: List[Tuple[str, str]] = [
-    ("Rename the variable foo to bar in utils.py", "fast"),
-    ("Summarize this 3-paragraph email in two bullets", "fast"),
-    ("What is the capital of France?", "fast"),
-    ("Follow these steps to add a logging line to main.py", "fast"),
-    ("Apply the same null-check pattern across a few files", "standard"),
-    ("Wire up a CRUD endpoint using the existing handler pattern", "standard"),
-    ("Debug why auth fails intermittently in production", "reasoning"),
-    ("Design the architecture for a multi-tenant billing system", "reasoning"),
-    ("Investigate ambiguous requirements and propose an API shape", "reasoning"),
-    ("Review this auth change for XSS and credential leaks", "reasoning"),
-    ("Prove a novel consensus algorithm and redesign the entire distributed store", "max"),
-    ("Open-ended research: invent a new indexing approach for this corpus", "max"),
+# (task, expected_tier, expected_gate)
+EXAMPLES: List[Tuple[str, str, str]] = [
+    ("Rename the variable foo to bar in utils.py", "fast", "auto_continue"),
+    ("Summarize this 3-paragraph email in two bullets", "fast", "auto_continue"),
+    ("What is the capital of France?", "fast", "auto_continue"),
+    ("Follow these steps to add a logging line to main.py", "fast", "auto_continue"),
+    ("Apply the same null-check pattern across a few files", "standard", "auto_continue"),
+    ("Wire up a CRUD endpoint using the existing handler pattern", "standard", "auto_continue"),
+    (
+        "Rename the helper and apply the same null-check pattern across a few files",
+        "standard",
+        "confirm",
+    ),
+    ("Debug why auth fails intermittently in production", "reasoning", "hard_gate"),
+    ("Design the architecture for a multi-tenant billing system", "reasoning", "confirm"),
+    ("Investigate ambiguous requirements and propose an API shape", "reasoning", "confirm"),
+    ("Review this auth change for XSS and credential leaks", "reasoning", "hard_gate"),
+    ("Choose carefully: rename foo to bar in utils.py", "fast", "confirm"),
+    ("Send a newsletter to all customers about the outage", "reasoning", "hard_gate"),
+    (
+        "The light attempt failed; escalate after that debug of the timeout",
+        "reasoning",
+        "confirm",
+    ),
+    ("Prove a novel consensus algorithm and redesign the entire distributed store", "max", "confirm"),
+    ("Open-ended research: invent a new indexing approach for this corpus", "max", "confirm"),
 ]
 
 
@@ -257,6 +459,15 @@ def suggest_line(task: str, result=None) -> str:
     short_why = why
     if len(short_why) > 120:
         short_why = short_why[:117].rsplit(" ", 1)[0] + "…"
+    gate = result.get("gate", "confirm")
+    if gate == "auto_continue":
+        return f"Auto continues on **{tier}** — {short_why}."
+    if gate == "hard_gate":
+        return (
+            f"Auto suggests **{tier}** — {short_why}. "
+            "Confirm required (high-risk / hard to undo), or override "
+            "(fast | standard | reasoning | max)."
+        )
     return (
         f"Auto suggests **{tier}** — {short_why}. "
         "Confirm to run, or override (fast | standard | reasoning | max)."
@@ -273,26 +484,38 @@ def print_suggestion(task: str) -> dict:
 
 def print_examples() -> None:
     print("Prototype rubric examples — provider-agnostic Auto:\n")
-    print("UX: classify → suggest → user confirm/override → run\n")
+    print("UX: classify → suggest → boundary-gated confirm/override → run\n")
     passed = 0
     failed = 0
-    for task, expected in EXAMPLES:
+    for task, expected_tier, expected_gate in EXAMPLES:
         result = classify(task)
-        ok = result["tier"] == expected
+        ok = result["tier"] == expected_tier and result.get("gate") == expected_gate
         mark = "✓" if ok else "✗"
         if ok:
             passed += 1
         else:
             failed += 1
-        print(f"{mark} expected={expected:10} got={result['tier']:10}  {task}")
+        print(
+            f"{mark} expected={expected_tier:10}/{expected_gate:13} "
+            f"got={result['tier']:10}/{result.get('gate')}  {task}"
+        )
         print(f"   reason: {result['reason']}")
         print(f"   signals: {result['signals']}")
-        print(f"   confidence: {result['confidence']}")
+        print(
+            f"   confidence: {result['confidence']}  "
+            f"near_boundary: {result.get('near_boundary')}  "
+            f"high_risk: {result.get('high_risk')}  "
+            f"reversible: {result.get('reversible')}"
+        )
+        print(f"   gate: {result.get('gate')} — {result.get('gate_reason')}")
         print(f"   suggest: {suggest_line(task, result)}")
         print()
     print(f"Summary: {passed}/{passed + failed} passed")
     print("--- JSON ---")
-    out = [{"task": t, "expected": e, "result": classify(t)} for t, e in EXAMPLES]
+    out = [
+        {"task": t, "expected_tier": e, "expected_gate": g, "result": classify(t)}
+        for t, e, g in EXAMPLES
+    ]
     print(json.dumps(out, indent=2))
     return failed == 0
 

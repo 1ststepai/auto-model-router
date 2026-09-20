@@ -29,16 +29,17 @@ Copy-Item skills\auto-model-router\SKILL.md "$env:USERPROFILE\.cursor\skills\aut
 
 An optional always-apply `.cursor/rules/auto-model-router.mdc` can point at the project skill. Keep the rule short; the full example is in [`../INSTALL.md`](../INSTALL.md).
 
-## Wire suggest → confirm
+## Wire suggest → gate → run
 
 1. Before a model-dependent task, assess context and classify it as `fast`, `standard`, `reasoning`, or `max`.
-2. Show `Auto suggests <tier> — <reason>. Confirm to run, or override...` in chat.
-3. Wait for the user's confirmation or model/tier override.
-4. Use Cursor's model picker and available effort controls to map the confirmed tier, then run.
-5. If the attempt is clearly too light, explain the escalation once and select a stronger configured option.
+2. Decide the confirm gate (`auto_continue`, `confirm`, or `hard_gate`) using the skill policy.
+3. Show `Auto continues on <tier> — <reason>.` or `Auto suggests <tier> — <reason>. Confirm...` in chat.
+4. Auto-continue only when the gate allows it; otherwise wait for confirmation or a model/tier override.
+5. Use Cursor's model picker and available effort controls to map the gated tier, then run.
+6. If the attempt is clearly too light, stop for confirm, explain the escalation once, and select a stronger configured option.
 
 Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill.
 
 ## Verify
 
-Start a new Agent chat (or restart Cursor after a user-wide install), ask for a moderate task without naming a model, and confirm that the `Auto suggests <tier> — <reason>...` line appears before edits. Reply `confirm` or override the tier. Cursor's native Auto picker is separate and may still choose silently.
+Start a new Agent chat (or restart Cursor after a user-wide install). A clear rename should print `Auto continues on fast — ...` and start. A security-sensitive or mixed-boundary task should wait. Reply `confirm` or override the tier when asked. Cursor's native Auto picker is separate and may still choose silently.

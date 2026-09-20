@@ -22,16 +22,16 @@ Copy-Item skills\auto-model-router\SKILL.md .claude\skills\auto-model-router\SKI
 
 For a user-wide copy, use `~/.claude/skills/auto-model-router/SKILL.md` on macOS/Linux/WSL or `%USERPROFILE%\.claude\skills\auto-model-router\SKILL.md` on native Windows. You can also include `@.claude/skills/auto-model-router/SKILL.md` from a project `CLAUDE.md`.
 
-## Wire suggest → confirm
+## Wire suggest → gate → run
 
-1. Classify the request using the neutral four-tier rubric.
+1. Classify the request using the neutral four-tier rubric and the confirm-gate policy.
 2. Tell the user the suggested tier and short reason before starting model work.
-3. Wait for `confirm` or an explicit tier/model override.
+3. Auto-continue only when the gate allows it; otherwise wait for `confirm` or an explicit tier/model override.
 4. Select the configured Claude model or effort setting for that tier, then run.
-5. After a failed light attempt, state that you are escalating and continue with a stronger configured model/effort.
+5. After a failed light attempt, stop for confirm, state that you are escalating, and continue with a stronger configured model/effort.
 
 Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project.
 
 ## Verify
 
-Start a new Claude Code session after installing. Ask for a moderate task without choosing a model or effort, and check for the `Auto suggests <tier> — <reason>...` line before file changes. Reply `confirm` or override explicitly. Project files are the dependable choice for cloud sessions; a local `~/.claude` copy does not automatically follow a remote checkout.
+Start a new Claude Code session after installing. A clear rename should auto-continue with `Auto continues on fast — ...`. A security-sensitive or mixed-boundary task should wait. Reply `confirm` or override explicitly when asked. Project files are the dependable choice for cloud sessions; a local `~/.claude` copy does not automatically follow a remote checkout.

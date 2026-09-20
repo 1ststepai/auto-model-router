@@ -208,7 +208,7 @@ def human_report(
     if summary["task_count"] == 0:
         lines.extend([
             "No routing decisions in this window.",
-            "After confirmed runs, agents may append non-sensitive lines to usage.jsonl.",
+            "After authorized runs (confirm or auto-continue), agents may append non-sensitive lines to usage.jsonl.",
             "See SKILL.md for the schema. Nothing is forced; weekly review stays opt-in.",
         ])
         return "\n".join(lines)
