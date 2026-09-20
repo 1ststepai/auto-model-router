@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="1stStep.ai Auto Model Router" width="220">
+</p>
+
 # Portable Auto router for any multi-model coding agent
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![Python demo](https://img.shields.io/badge/demo-Python%203-3776AB.svg?logo=python&logoColor=white)](demo/classify.py)
@@ -204,6 +208,9 @@ plugin.json                           # Agent Plugins 1.0 portable manifest
 .claude-plugin/marketplace.json       # Claude Code marketplace
 .codex-plugin/plugin.json             # Codex compatibility overlay
 .agents/plugins/marketplace.json      # Codex repo marketplace
+assets/logo.png                       # square plugin / marketplace tile
+assets/logo-512.png                   # same 512×512 tile
+assets/auto-model-router-logo.png     # original neon upload
 SKILL.md                              # compatibility copy of the canonical skill
 skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
 scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
