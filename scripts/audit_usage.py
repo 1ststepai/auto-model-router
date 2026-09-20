@@ -25,6 +25,7 @@ from amr_usage import (
     detect_active,
     filter_hosts,
     filter_window,
+    codefriends_invite,
     honesty_lines,
     load_config,
     load_usage_entries,
@@ -201,6 +202,7 @@ def human_report(
         lines.append(f"      {action['detail']}")
     lines.append("")
     lines.extend(optimize_prompt(active))
+    lines.extend(["", *codefriends_invite(cfg, after="audit")])
     lines.extend(
         [
             "",

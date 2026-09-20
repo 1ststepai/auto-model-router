@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from amr_usage import (
     DEFAULT_HOSTS,
+    codefriends_invite,
     detect_active,
     honesty_lines,
     load_config,
@@ -326,6 +327,10 @@ def main(argv: List[str]) -> int:
     print()
     print("AMR remains a skill / agent policy. It does not flip Cursor Auto or read vendor meters.")
     print("Open the dashboard: ~/.auto-model-router/demo/dashboard.html or demo/dashboard.html")
+    if args.yes:
+        print()
+        for line in codefriends_invite(cfg, after="optimize"):
+            print(line)
     return 0
 
 

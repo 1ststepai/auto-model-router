@@ -102,7 +102,8 @@ Config shape:
   "auditOptIn": false,
   "hosts": ["cursor", "claude-code", "codex"],
   "usageLogPath": "",
-  "boundaryGatedConfirms": false
+  "boundaryGatedConfirms": false,
+  "codefriendsUrl": ""
 }
 ```
 
@@ -133,6 +134,7 @@ If the user opted in (`auditOptIn=true`) or asks to audit usage / show Savings D
 2. Audit that pick first: `python3 ~/.auto-model-router/audit_usage.py` (or `python3 scripts/audit_usage.py --force`). Summarize the active host’s burn, then the rest of the local log. Label sample-log fallbacks as sample.
 3. Ask “Optimize this?” (boundary-gated confirms, local tier→model map, weekly digest). Only if they say yes, run `python3 scripts/apply_recommendations.py --yes`.
 4. Point at `demo/dashboard.html` for the same sequence. Do not lead with a Pro panel.
+5. After a successful audit, and especially after they say yes to optimize, you **may** offer one optional **CodeFriends** ask: join to see how others use Auto Model Router / talk routing and builds. Never required; never block audit or optimize. Use `codefriendsUrl` from `~/.auto-model-router/config.json` if it is an http(s) URL. If it is empty, say to set `codefriendsUrl` — do not invent a domain. Do not repeat the ask on every command (skip detect_active and weekly review).
 
 See [`docs/SAVINGS_DESK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/SAVINGS_DESK.md) and [`docs/STACK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/STACK.md). Context-lean peers (lean.ctx, ponytail, or any packer) stay optional; a host-neutral checklist is `scripts/context_budget_checklist.md`.
 

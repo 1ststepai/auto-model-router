@@ -69,7 +69,7 @@ python3 scripts/apply_recommendations.py --yes --enable-weekly-review  # only af
 # Dashboard: ~/.auto-model-router/demo/dashboard.html  or  demo/dashboard.html
 ```
 
-Consent is required before agents append `usage.jsonl`. Collected: tier, host, confirmed/overridden, task_kind. Never: prompts, code, secrets, vendor credentials. Apply writes local `cursor-tier-map.json` plus Claude/Codex stubs and sets the boundary-gated confirm flag. See [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md).
+Consent is required before agents append `usage.jsonl`. Collected: tier, host, confirmed/overridden, task_kind. Never: prompts, code, secrets, vendor credentials. Apply writes local `cursor-tier-map.json` plus Claude/Codex stubs and sets the boundary-gated confirm flag. See [`docs/SAVINGS_DESK.md`](docs/SAVINGS_DESK.md). After a successful audit (and after you say yes to optimize), AMR may optionally ask if you want to join **CodeFriends** — never required; set `codefriendsUrl` in config if you have an invite, otherwise it will not invent a domain.
 
 **Optional weekly review** (local usage log only — not vendor billing):
 

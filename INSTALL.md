@@ -104,7 +104,8 @@ From a clone of this repository:
   "auditOptIn": false,
   "hosts": ["cursor", "claude-code", "codex"],
   "usageLogPath": "",
-  "boundaryGatedConfirms": false
+  "boundaryGatedConfirms": false,
+  "codefriendsUrl": ""
 }
 ```
 

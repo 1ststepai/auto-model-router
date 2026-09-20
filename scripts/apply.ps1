@@ -100,6 +100,7 @@ function Read-Config {
     currentHost = ""
     currentTier = ""
     currentModel = ""
+    codefriendsUrl = ""
   }
   if (Test-Path -LiteralPath $ConfigFile) {
     try {
@@ -126,6 +127,7 @@ function Read-Config {
       if ($null -ne $parsed.currentHost) { $cfg.currentHost = [string]$parsed.currentHost }
       if ($null -ne $parsed.currentTier) { $cfg.currentTier = [string]$parsed.currentTier }
       if ($null -ne $parsed.currentModel) { $cfg.currentModel = [string]$parsed.currentModel }
+      if ($null -ne $parsed.codefriendsUrl) { $cfg.codefriendsUrl = [string]$parsed.codefriendsUrl }
     } catch {
       # keep defaults
     }
@@ -146,6 +148,7 @@ function Write-Config {
     currentHost = [string]$Cfg.currentHost
     currentTier = [string]$Cfg.currentTier
     currentModel = [string]$Cfg.currentModel
+    codefriendsUrl = [string]$Cfg.codefriendsUrl
   }
   $json = ($obj | ConvertTo-Json -Depth 4) + [Environment]::NewLine
   [System.IO.File]::WriteAllText($ConfigFile, $json)
@@ -258,6 +261,7 @@ if (-not (Test-Path -LiteralPath $ConfigFile)) {
     currentHost = ""
     currentTier = ""
     currentModel = ""
+    codefriendsUrl = ""
   })
   Write-Host "  created config → $ConfigFile"
 }

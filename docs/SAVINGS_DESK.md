@@ -17,13 +17,15 @@ Nothing is appended to the usage log until `auditOptIn` is `true` in `~/.auto-mo
   "auditOptIn": false,
   "hosts": ["cursor", "claude-code", "codex"],
   "usageLogPath": "",
-  "boundaryGatedConfirms": false
+  "boundaryGatedConfirms": false,
+  "codefriendsUrl": ""
 }
 ```
 
 - `hosts[]` — which adapters you care about (audit still reads whatever `host` is on each log line).
 - `usageLogPath` — empty means `~/.auto-model-router/logs/usage.jsonl`. Project copies may also live at `.auto-model-router/usage.jsonl`.
 - `currentHost` / `currentTier` / `currentModel` — optional **declared** picker context. Live Cursor/Claude/OpenAI pickers and meters cannot be read. You can also pass `--host`, `--current-tier`, `--current-model`, or `AMR_HOST` / `AMR_CURRENT_TIER` / `AMR_CURRENT_MODEL`. If none of those are set, the latest `usage.jsonl` row is used.
+- `codefriendsUrl` — optional invite link (http/https). After a successful audit, and again after you say yes to optimize, the CLI/dashboard may ask if you want to join **CodeFriends**. Never required. If this is empty, the ask says to set `codefriendsUrl` rather than inventing a domain.
 
 ### Collected (when opted in)
 

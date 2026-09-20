@@ -140,6 +140,7 @@ cfg = {
     "hosts": ["cursor", "claude-code", "codex"],
     "usageLogPath": "",
     "boundaryGatedConfirms": False,
+    "codefriendsUrl": "",
 }
 if path.is_file():
     try:
@@ -155,6 +156,7 @@ for k in ("openDashboardOnApply", "weeklyReview", "auditOptIn", "boundaryGatedCo
 if not isinstance(cfg.get("hosts"), list):
     cfg["hosts"] = ["cursor", "claude-code", "codex"]
 cfg["usageLogPath"] = str(cfg.get("usageLogPath") or "")
+cfg["codefriendsUrl"] = str(cfg.get("codefriendsUrl") or "")
 path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 print(f"  preference → {path} ({key}={'true' if val else 'false'})")
 PY
@@ -298,7 +300,8 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   "boundaryGatedConfirms": false,
   "currentHost": "",
   "currentTier": "",
-  "currentModel": ""
+  "currentModel": "",
+  "codefriendsUrl": ""
 }' > "$CONFIG_FILE"
   echo "  created config → $CONFIG_FILE"
 fi

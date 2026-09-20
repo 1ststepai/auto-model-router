@@ -8,5 +8,6 @@
   "currentHost": "",
   "currentTier": "",
   "currentModel": "",
-  "comment": "Copy to ~/.auto-model-router/config.json. usageLogPath empty means ~/.auto-model-router/logs/usage.jsonl. auditOptIn is required before agents append usage.jsonl. currentHost/currentTier/currentModel are optional declared picker context (not scraped). Flow: detect active model → audit that usage → ask optimize? → apply only with --yes. Collected if opted in: timestamp, tier, suggested_tier, confirmed, overridden, host, task_kind, gate. Never: prompts, code, secrets, vendor credentials, billing APIs."
+  "codefriendsUrl": "",
+  "comment": "Copy to ~/.auto-model-router/config.json. usageLogPath empty means ~/.auto-model-router/logs/usage.jsonl. auditOptIn is required before agents append usage.jsonl. currentHost/currentTier/currentModel are optional declared picker context (not scraped). codefriendsUrl is an optional community invite (http/https only); leave empty rather than inventing a domain. Flow: detect → audit → ask optimize? → apply only with --yes. After audit/optimize, one soft CodeFriends ask — never required. Collected if opted in: timestamp, tier, suggested_tier, confirmed, overridden, host, task_kind, gate. Never: prompts, code, secrets, vendor credentials, billing APIs."
 }

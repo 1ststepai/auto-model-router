@@ -31,7 +31,13 @@ def main() -> int:
 
     sample = json.loads((DEMO / "sample_usage_log.json").read_text(encoding="utf-8"))
     sys.path.insert(0, str(SCRIPTS))
-    from amr_usage import LIGHT_TASK_KINDS, detect_active, next_actions, summarize  # noqa: WPS433
+    from amr_usage import (  # noqa: WPS433
+        LIGHT_TASK_KINDS,
+        codefriends_invite,
+        detect_active,
+        next_actions,
+        summarize,
+    )
 
     summary = summarize(sample)
     if summary["task_count"] != 14:
@@ -59,6 +65,18 @@ def main() -> int:
     if declared.get("sources", {}).get("host") != "cli --host":
         errors.append(f"expected cli host source, got {declared.get('sources')}")
 
+    empty_invite = "\n".join(codefriends_invite({}, after="audit"))
+    if "codefriendsUrl" not in empty_invite or "Join CodeFriends?" not in empty_invite:
+        errors.append("empty config must ask to set codefriendsUrl")
+    linked = "\n".join(codefriends_invite({"codefriendsUrl": "https://example.test/codefriends"}, after="optimize"))
+    if "https://example.test/codefriends" not in linked:
+        errors.append("configured codefriendsUrl should be printed")
+    if "example.test" not in linked:
+        errors.append("invite should use the configured URL")
+    fake = "\n".join(codefriends_invite({"codefriendsUrl": "not-a-url"}, after="audit"))
+    if "not-a-url" in fake:
+        errors.append("non-http codefriendsUrl must not be treated as a link")
+
     env = os.environ.copy()
     with tempfile.TemporaryDirectory() as tmp:
         home = Path(tmp)
@@ -81,6 +99,8 @@ def main() -> int:
         detected = json.loads(detect.stdout)
         if detected.get("host") != "cursor" or detected.get("live_meter_read"):
             errors.append(f"detect_active sample should be cursor from log, got {detected}")
+        if "Join CodeFriends?" in detect.stdout:
+            errors.append("do not spam CodeFriends on detect_active")
 
         forced = run(
             [
@@ -104,6 +124,13 @@ def main() -> int:
             errors.append("audit should ask optimize? before applying")
         if "apply_recommendations.py --yes" not in forced.stdout:
             errors.append("audit should require --yes to apply")
+        if "Join CodeFriends?" not in forced.stdout:
+            errors.append("successful audit should include a soft CodeFriends ask")
+        if "codefriendsUrl" not in forced.stdout:
+            errors.append("empty invite should tell the user to set codefriendsUrl, not invent a domain")
+        for invented in ("codefriends.com", "https://codefriends", "http://codefriends"):
+            if invented in forced.stdout.lower():
+                errors.append(f"audit invented a CodeFriends domain: {invented}")
         payload = json.loads(forced.stdout.split("--- JSON ---", 1)[1])
         if payload.get("active", {}).get("tier") != "max":
             errors.append(f"active tier should be declared max, got {payload.get('active')}")
@@ -128,6 +155,8 @@ def main() -> int:
         )
         if no_yes.returncode != 2 or "without --yes" not in no_yes.stdout:
             errors.append(f"apply without --yes should refuse writes: {no_yes.returncode} {no_yes.stdout}")
+        if "Join CodeFriends?" in no_yes.stdout:
+            errors.append("do not show CodeFriends on the optimize-gate refusal (avoid spam)")
         if (home / ".auto-model-router" / "cursor-tier-map.json").is_file():
             errors.append("maps must not be written before --yes")
 
@@ -146,6 +175,8 @@ def main() -> int:
         )
         if rec.returncode != 0:
             errors.append(f"apply_recommendations --yes --force failed: {rec.stderr}\n{rec.stdout}")
+        if "Join CodeFriends?" not in rec.stdout:
+            errors.append("after optimize yes, include one CodeFriends ask")
         dest = home / ".auto-model-router"
         for name in ("cursor-tier-map.json", "claude-tier-map.json", "codex-tier-map.json"):
             path = dest / name
@@ -171,6 +202,8 @@ def main() -> int:
         "--yes",
         "auditOptIn",
         "Never:",
+        "Join CodeFriends?",
+        "codefriendsUrl",
     ):
         if needle not in dash:
             errors.append(f"dashboard.html missing {needle!r}")
@@ -178,6 +211,9 @@ def main() -> int:
     active_at = dash.find("What are you using right now?")
     if pro_at != -1 and active_at != -1 and pro_at < active_at:
         errors.append("dashboard must not lead with the Pro upsell")
+    cf_at = dash.find("Join CodeFriends?")
+    if cf_at != -1 and active_at != -1 and cf_at < active_at:
+        errors.append("CodeFriends ask must not lead the dashboard")
     if "<details" not in dash or "pro-panel" not in dash:
         errors.append("Pro copy should be collapsed at the bottom, not the lead")
 

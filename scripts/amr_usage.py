@@ -55,6 +55,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "currentHost": "",
     "currentTier": "",
     "currentModel": "",
+    # Optional community invite. Empty = show “set codefriendsUrl”; never invent a domain.
+    "codefriendsUrl": "",
 }
 
 COLLECTED_FIELDS = (
@@ -141,6 +143,7 @@ def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
     cfg["currentHost"] = str(cfg.get("currentHost") or "").strip()
     cfg["currentTier"] = str(cfg.get("currentTier") or "").strip().lower()
     cfg["currentModel"] = str(cfg.get("currentModel") or "").strip()
+    cfg["codefriendsUrl"] = str(cfg.get("codefriendsUrl") or "").strip()
     return cfg
 
 
@@ -683,6 +686,32 @@ def optimize_offers(summary: Dict[str, Any], cfg: Dict[str, Any], active: Option
             },
         )
     return actions
+
+
+def codefriends_url(cfg: Optional[Dict[str, Any]] = None) -> str:
+    """Return a configured http(s) invite URL, or empty. Never invent a domain."""
+    raw = str((cfg or {}).get("codefriendsUrl") or "").strip()
+    if raw.lower().startswith(("http://", "https://")):
+        return raw
+    return ""
+
+
+def codefriends_invite(cfg: Optional[Dict[str, Any]] = None, *, after: str = "audit") -> List[str]:
+    """One optional CodeFriends ask. Never required; never blocks AMR."""
+    url = codefriends_url(cfg)
+    when = "after this audit" if after == "audit" else "now that you chose to optimize"
+    lines = [
+        f"Join CodeFriends? Optional {when} — see how others use Auto Model Router / talk routing and builds.",
+        "Never required. Skipping does not change the audit or the local maps.",
+    ]
+    if url:
+        lines.append(f"  {url}")
+    else:
+        lines.append(
+            "  Set codefriendsUrl in ~/.auto-model-router/config.json to a real invite link "
+            "(no domain is bundled)."
+        )
+    return lines
 
 
 def optimize_prompt(active: Optional[Dict[str, Any]] = None) -> List[str]:
