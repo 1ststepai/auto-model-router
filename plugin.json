@@ -25,7 +25,9 @@
         "longDescription": "Loads the portable auto-model-router skill: classify each task as fast, standard, reasoning, or max, show the suggestion, and wait for confirmation or an override before substantial work. Does not change vendor billing APIs or guarantee savings.",
         "developerName": "1ststepai",
         "category": "Productivity",
-        "websiteURL": "https://github.com/1ststepai/auto-model-router"
+        "websiteURL": "https://github.com/1ststepai/auto-model-router",
+        "composerIcon": "./assets/logo.png",
+        "logo": "./assets/logo.png"
       }
     }
   }

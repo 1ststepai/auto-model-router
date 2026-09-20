@@ -9,6 +9,7 @@
   "homepage": "https://github.com/1ststepai/auto-model-router",
   "repository": "https://github.com/1ststepai/auto-model-router",
   "license": "MIT",
+  "logo": "assets/logo.png",
   "keywords": [
     "model-routing",
     "agent-skills",
