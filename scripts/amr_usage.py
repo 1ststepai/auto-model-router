@@ -51,6 +51,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "hosts": list(DEFAULT_HOSTS),
     "usageLogPath": "",
     "boundaryGatedConfirms": False,
+    # User-declared local picker context — never scraped from a vendor UI.
+    "currentHost": "",
+    "currentTier": "",
+    "currentModel": "",
 }
 
 COLLECTED_FIELDS = (
@@ -134,6 +138,9 @@ def load_config(path: Optional[Path] = None) -> Dict[str, Any]:
     cfg["boundaryGatedConfirms"] = as_bool(cfg.get("boundaryGatedConfirms", False))
     cfg["hosts"] = normalize_hosts(cfg.get("hosts", DEFAULT_HOSTS))
     cfg["usageLogPath"] = str(cfg.get("usageLogPath") or "")
+    cfg["currentHost"] = str(cfg.get("currentHost") or "").strip()
+    cfg["currentTier"] = str(cfg.get("currentTier") or "").strip().lower()
+    cfg["currentModel"] = str(cfg.get("currentModel") or "").strip()
     return cfg
 
 
@@ -464,8 +471,229 @@ def _map_exists(host: str) -> bool:
 
 def honesty_lines() -> List[str]:
     return [
-        "Honest scope: local usage log only. Not live Cursor/Claude/Codex/Gemini billing.",
+        "Honest scope: local usage log + declared current model/tier. Not live Cursor/Claude/Codex/Gemini billing.",
+        "Live vendor pickers and meters cannot be read. No dashboard is scraped.",
         "Rates below are illustrative relative units (fast=1x, standard=3x, reasoning=8x, max=20x).",
         "Collected when you opt in: " + ", ".join(COLLECTED_FIELDS) + ".",
         "Never collected: " + ", ".join(NEVER_COLLECTED) + ".",
+    ]
+
+
+def _latest_entry(entries: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    dated: List[Tuple[datetime, int, Dict[str, Any]]] = []
+    undated: List[Dict[str, Any]] = []
+    for index, item in enumerate(entries):
+        ts = parse_timestamp(item.get("timestamp"))
+        if ts is None:
+            undated.append(item)
+        else:
+            dated.append((ts, index, item))
+    if dated:
+        dated.sort()
+        return dated[-1][2]
+    return undated[-1] if undated else None
+
+
+def _lookup_model_in_maps(model: str) -> Tuple[Optional[str], Optional[str], Optional[Path]]:
+    """If a local tier map lists this picker/model label, return (host, tier, path)."""
+    if not model:
+        return None, None, None
+    needle = model.strip().lower()
+    names = {
+        "cursor": "cursor-tier-map.json",
+        "claude-code": "claude-tier-map.json",
+        "codex": "codex-tier-map.json",
+        "gemini": "gemini-tier-map.json",
+    }
+    search_dirs = [maps_dir(), Path.cwd() / ".auto-model-router"]
+    for directory in search_dirs:
+        for host, filename in names.items():
+            path = directory / filename
+            if not path.is_file():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            for tier in TIERS:
+                block = data.get(tier)
+                if not isinstance(block, dict):
+                    continue
+                for key in ("picker", "model", "label"):
+                    label = str(block.get(key) or "").strip().lower()
+                    if label and label == needle and not label.startswith("<"):
+                        return host, tier, path
+    return None, None, None
+
+
+def detect_active(
+    *,
+    cfg: Optional[Dict[str, Any]] = None,
+    entries: Optional[Sequence[Dict[str, Any]]] = None,
+    host: Optional[str] = None,
+    tier: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Detect the model/tier the user is actively using — local context only.
+
+    Priority: CLI/args → env (AMR_HOST / AMR_CURRENT_TIER / AMR_CURRENT_MODEL)
+    → config currentHost/currentTier/currentModel → local tier-map label match
+    → most recent usage.jsonl row. Never reads a live vendor picker or meter.
+    """
+    cfg = cfg if cfg is not None else load_config()
+    sources: Dict[str, str] = {}
+
+    def _take(value: Optional[str], source: str, bucket: str) -> Optional[str]:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        sources[bucket] = source
+        return text
+
+    host = _take(host, "cli --host", "host") or _take(
+        os.environ.get("AMR_HOST") or os.environ.get("AMR_CURRENT_HOST"),
+        "env AMR_HOST",
+        "host",
+    ) or _take(cfg.get("currentHost"), "config currentHost", "host")
+
+    tier_raw = _take(tier, "cli --current-tier", "tier") or _take(
+        os.environ.get("AMR_CURRENT_TIER"),
+        "env AMR_CURRENT_TIER",
+        "tier",
+    ) or _take(cfg.get("currentTier"), "config currentTier", "tier")
+    resolved_tier = _tier(tier_raw) if tier_raw else None
+    if tier_raw and not resolved_tier:
+        sources.pop("tier", None)
+
+    model = _take(model, "cli --current-model", "model") or _take(
+        os.environ.get("AMR_CURRENT_MODEL"),
+        "env AMR_CURRENT_MODEL",
+        "model",
+    ) or _take(cfg.get("currentModel"), "config currentModel", "model")
+
+    if model:
+        map_host, map_tier, map_path = _lookup_model_in_maps(model)
+        if map_host and not host:
+            host = map_host
+            sources["host"] = f"local map {map_path.name}"
+        if map_tier and not resolved_tier:
+            resolved_tier = map_tier
+            sources["tier"] = f"local map {map_path.name}"
+
+    latest = _latest_entry(entries or [])
+    if latest:
+        if not host:
+            host = _take(latest.get("host"), "latest usage.jsonl host", "host")
+        if not resolved_tier:
+            latest_tier = _tier(latest.get("tier"))
+            if latest_tier:
+                resolved_tier = latest_tier
+                sources["tier"] = "latest usage.jsonl tier"
+        if not model:
+            for key in ("model", "picker", "current_model"):
+                if latest.get(key):
+                    model = _take(latest.get(key), f"latest usage.jsonl {key}", "model")
+                    break
+
+    if host:
+        host = str(host).strip().lower()
+
+    note = (
+        "Live Cursor/Claude/OpenAI/Gemini pickers and usage meters cannot be read. "
+        "This is declared local context and/or the most recent usage.jsonl row."
+    )
+    if not host and not resolved_tier and not model:
+        note += " Nothing was declared — pass --host / --current-tier / --current-model or set config currentHost."
+
+    return {
+        "host": host,
+        "tier": resolved_tier,
+        "model": model,
+        "sources": sources,
+        "live_meter_read": False,
+        "live_picker_read": False,
+        "note": note,
+    }
+
+
+def filter_active_entries(
+    entries: Iterable[Dict[str, Any]], active: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Rows for the active host (preferred). Does not drop the whole log if host is unknown."""
+    host = str(active.get("host") or "").strip().lower()
+    if not host:
+        return list(entries)
+    return filter_hosts(entries, [host])
+
+
+def active_burn(entries: List[Dict[str, Any]], active: Dict[str, Any]) -> Dict[str, Any]:
+    """Burn pattern for the active host, with extra focus on the current tier/model."""
+    scoped = filter_active_entries(entries, active)
+    summary = summarize(scoped)
+    current_tier = _tier(active.get("tier"))
+    at_tier = [item for item in scoped if _tier(item.get("tier")) == current_tier] if current_tier else []
+    at_tier_units = 0.0
+    for item in at_tier:
+        item_tier = _tier(item.get("tier"))
+        if item_tier:
+            at_tier_units += EXAMPLE_RATES[item_tier]
+    lighter = None
+    if current_tier and TIER_RANK[current_tier] > 0:
+        lighter = TIERS[TIER_RANK[current_tier] - 1]
+    lighter_units = (
+        len(at_tier) * EXAMPLE_RATES[lighter] if lighter and at_tier else None
+    )
+    return {
+        "active": {
+            "host": active.get("host"),
+            "tier": current_tier,
+            "model": active.get("model"),
+            "sources": active.get("sources") or {},
+            "live_meter_read": False,
+        },
+        "host_summary": summary,
+        "current_tier_task_count": len(at_tier),
+        "current_tier_relative_units": round(at_tier_units, 2),
+        "one_step_lighter_tier": lighter,
+        "current_tier_if_one_step_lighter_units": round(lighter_units, 2) if lighter_units is not None else None,
+        "heavy_on_light_on_host": [
+            row for row in summary.get("heavy_on_light") or []
+        ],
+        "billing_api_accessed": False,
+    }
+
+
+def optimize_offers(summary: Dict[str, Any], cfg: Dict[str, Any], active: Optional[Dict[str, Any]] = None) -> List[Dict[str, str]]:
+    """What optimize would do — not applied until the user says yes."""
+    actions = next_actions(summary, cfg)
+    host = str((active or {}).get("host") or "").strip()
+    tier = str((active or {}).get("tier") or "").strip()
+    model = str((active or {}).get("model") or "").strip()
+    if host or tier or model:
+        target = " / ".join(part for part in (host or "host?", model or None, tier or None) if part)
+        actions.insert(
+            0,
+            {
+                "id": "switch-recommendation",
+                "title": f"Review a switch-down for the active pick ({target})",
+                "detail": "If this pick is heavier than the logged task_kind mix, map a lighter tier "
+                "in the local *-tier-map.json. AMR will not flip the host picker.",
+            },
+        )
+    return actions
+
+
+def optimize_prompt(active: Optional[Dict[str, Any]] = None) -> List[str]:
+    who = ""
+    if active and (active.get("host") or active.get("model") or active.get("tier")):
+        bits = [str(active.get("host") or ""), str(active.get("model") or ""), str(active.get("tier") or "")]
+        who = " for " + " / ".join(bit for bit in bits if bit)
+    return [
+        f"Optimize{who}?",
+        "That would: enable boundary-gated confirms, write/update local tier→model maps,",
+        "and optionally turn on the weekly digest. Nothing is applied until you say yes.",
+        "  python3 scripts/apply_recommendations.py --yes",
+        "Preview only: python3 scripts/apply_recommendations.py --dry-run",
     ]

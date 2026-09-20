@@ -63,8 +63,9 @@ This copies the skill into user skills dirs (Cursor, Claude, Codex), installs th
 
 ```bash
 ./scripts/apply.sh --enable-audit --no-open
-python3 scripts/audit_usage.py --force
-python3 scripts/apply_recommendations.py --enable-weekly-review
+python3 scripts/detect_active.py          # current host/tier from local context
+python3 scripts/audit_usage.py --force    # audits that pick first, then asks optimize?
+python3 scripts/apply_recommendations.py --yes --enable-weekly-review  # only after yes
 # Dashboard: ~/.auto-model-router/demo/dashboard.html  or  demo/dashboard.html
 ```
 
@@ -229,7 +230,8 @@ scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
 scripts/amr_usage.py                   # shared local-log helpers (no vendor APIs)
 scripts/audit_usage.py                 # Savings Desk audit (burns, confirm rate, relative units)
-scripts/apply_recommendations.py       # write local tier maps + boundary-gate flag
+scripts/detect_active.py               # declare or infer current host/tier (no live picker)
+scripts/apply_recommendations.py       # write local maps only after --yes
 scripts/context_budget_checklist.md    # optional context-lean pairing checklist
 integrations/CURSOR.md
 integrations/CLAUDE.md

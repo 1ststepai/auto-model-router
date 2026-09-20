@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Savings Desk audit — local usage.jsonl report.
+"""Savings Desk audit — active model first, then ask before optimizing.
 
-Reads the opt-in local routing log and prints burns by host, heavy-tier use on
-likely-light tasks, confirm/override rates, and relative units vs always-max.
+Detects the host/tier/model you are using from local context (--current-tier,
+config, recent usage.jsonl). Reports that pick's burn. Then asks whether to
+optimize. Does not apply maps or flags.
 
-Does not access vendor billing, quota, or token APIs.
+Does not access vendor billing, quota, picker, or token APIs.
 """
 
 from __future__ import annotations
@@ -20,16 +21,25 @@ from typing import Any, Dict, List, Optional
 
 from amr_usage import (
     TIERS,
+    active_burn,
+    detect_active,
     filter_hosts,
     filter_window,
     honesty_lines,
     load_config,
     load_usage_entries,
-    next_actions,
+    optimize_offers,
+    optimize_prompt,
     resolve_usage_log,
     sample_log_candidates,
     summarize,
 )
+
+
+def _fmt_sources(sources: Dict[str, str]) -> str:
+    if not sources:
+        return "undeclared"
+    return ", ".join(f"{key}←{value}" for key, value in sources.items())
 
 
 def human_report(
@@ -37,14 +47,20 @@ def human_report(
     window_days: Optional[int],
     log_path: Path,
     summary: Dict[str, Any],
+    burn: Dict[str, Any],
     used_sample: bool,
     missing_ts: int,
     cfg: Dict[str, Any],
     now: datetime,
     host_filter: List[str],
+    active: Dict[str, Any],
 ) -> str:
+    host = active.get("host") or "unknown host"
+    tier = active.get("tier") or "unknown tier"
+    model = active.get("model") or "undeclared picker label"
     lines = [
         "Auto Model Router — Savings Desk audit",
+        "Flow: detect active model → audit that usage → ask “optimize?” → apply only if yes.",
     ]
     if window_days:
         lines.append(
@@ -55,10 +71,17 @@ def human_report(
     lines.extend(
         [
             f"Log: {log_path}",
-            f"Hosts filter: {', '.join(host_filter) if host_filter else 'all logged hosts'}",
+            f"Hosts filter: {', '.join(host_filter) if host_filter else 'all logged hosts (active host highlighted)'}",
             f"auditOptIn: {'true' if cfg.get('auditOptIn') else 'false'}",
             "",
             *honesty_lines(),
+            "",
+            "1. Active model (what you are using now — local context, not a live meter)",
+            f"  host:  {host}",
+            f"  tier:  {tier}",
+            f"  model: {model}",
+            f"  source: {_fmt_sources(active.get('sources') or {})}",
+            f"  {active.get('note')}",
             "",
         ]
     )
@@ -70,87 +93,119 @@ def human_report(
                 "",
             ]
         )
-    if summary["task_count"] == 0:
+
+    host_summary = burn.get("host_summary") or {}
+    if host_summary.get("task_count"):
+        host_counts = ", ".join(
+            f"{t}={host_summary['tasks_by_tier'][t]}"
+            for t in TIERS
+            if host_summary["tasks_by_tier"][t]
+        ) or "none"
+        lines.extend(
+            [
+                f"2. Burn for active host ({host})",
+                f"  Decisions on this host: {host_summary['task_count']} ({host_counts})",
+                f"  Routed: {host_summary['routed_relative_units']:.1f} relative units",
+                f"  Est. vs always-max on this host: {host_summary['estimated_savings_vs_always_max_pct']:.1f}%",
+                f"  Confirm {host_summary['confirm_rate_pct']:.1f}%  |  Override {host_summary['override_rate_pct']:.1f}%",
+                f"  Heavy-tier on likely-light tasks (this host): {host_summary['heavy_on_light_count']}",
+            ]
+        )
+        if active.get("tier"):
+            lines.append(
+                f"  Current tier {tier}: {burn.get('current_tier_task_count', 0)} logged task(s), "
+                f"{burn.get('current_tier_relative_units', 0):.1f} rel units"
+            )
+            lighter = burn.get("one_step_lighter_tier")
+            if lighter and burn.get("current_tier_if_one_step_lighter_units") is not None:
+                lines.append(
+                    f"  If those current-tier rows had been {lighter}: "
+                    f"{burn['current_tier_if_one_step_lighter_units']:.1f} rel units "
+                    f"(illustrative only)"
+                )
+        lines.append("")
+    elif summary["task_count"] == 0:
         lines.extend(
             [
                 "No routing decisions in this window.",
                 "After you opt in, agents may append non-sensitive lines to usage.jsonl.",
                 "See SKILL.md / docs/SAVINGS_DESK.md. Audit stays consent-gated.",
+                "",
             ]
         )
-        return "\n".join(lines)
-
-    counts = ", ".join(
-        f"{tier}={summary['tasks_by_tier'][tier]}"
-        for tier in TIERS
-        if summary["tasks_by_tier"][tier]
-    ) or "none"
-    lines.extend(
-        [
-            f"Decisions: {summary['task_count']} ({counts})",
-            f"Confirm rate: {summary['confirm_rate_pct']:.1f}% "
-            f"({summary['confirmed_count']}/{summary['task_count']})",
-            f"Override rate: {summary['override_rate_pct']:.1f}% "
-            f"({summary['override_count']}/{summary['task_count']})",
-            f"Switch-downs (used lighter than suggested): {summary['switch_down_count']}",
-            f"Switch-ups (used heavier than suggested): {summary['switch_up_count']}",
-            f"Routed usage: {summary['routed_relative_units']:.1f} relative units",
-            f"Est. savings vs always-reasoning: {summary['estimated_savings_vs_always_reasoning_pct']:.1f}%",
-            f"Est. savings vs always-max: {summary['estimated_savings_vs_always_max_pct']:.1f}%",
-            "",
-            "Burns by host (relative units from the local log):",
-        ]
-    )
-    burns = summary.get("burns_by_host") or {}
-    if not burns:
-        lines.append("  (no host field on these rows)")
     else:
-        for host, stats in burns.items():
-            tier_bits = ", ".join(
-                f"{tier}={stats['tasks_by_tier'][tier]}"
-                for tier in TIERS
-                if stats["tasks_by_tier"][tier]
-            )
-            lines.append(
-                f"  {host}: {stats['count']} task(s), "
-                f"{stats['relative_units']:.1f} rel units ({tier_bits})"
-            )
+        lines.extend(
+            [
+                f"2. Burn for active host ({host}): no log rows matched this host.",
+                "  Showing the full local log below so you can still see the pattern.",
+                "",
+            ]
+        )
 
-    lines.extend(
-        [
-            "",
-            f"Heavy-tier use on likely-light tasks: {summary['heavy_on_light_count']}",
-        ]
-    )
-    if summary["heavy_on_light_count"] == 0:
-        lines.append("  (none, or task_kind was not logged)")
-    else:
-        for row in summary["heavy_on_light"][:12]:
-            when = row.get("timestamp") or "unknown-time"
-            lines.append(
-                f"  {when}  {row.get('host')}  {row.get('tier')} on task_kind={row.get('task_kind')}"
-            )
-        extra = summary["heavy_on_light_count"] - 12
-        if extra > 0:
-            lines.append(f"  … {extra} more")
+    if summary["task_count"]:
+        counts = ", ".join(
+            f"{t}={summary['tasks_by_tier'][t]}"
+            for t in TIERS
+            if summary["tasks_by_tier"][t]
+        ) or "none"
+        lines.extend(
+            [
+                "All logged hosts (same window, still local-only):",
+                f"  Decisions: {summary['task_count']} ({counts})",
+                f"  Confirm rate: {summary['confirm_rate_pct']:.1f}% "
+                f"({summary['confirmed_count']}/{summary['task_count']})",
+                f"  Override rate: {summary['override_rate_pct']:.1f}% "
+                f"({summary['override_count']}/{summary['task_count']})",
+                f"  Switch-downs: {summary['switch_down_count']}  |  Switch-ups: {summary['switch_up_count']}",
+                f"  Routed: {summary['routed_relative_units']:.1f} rel units  |  "
+                f"vs always-max: {summary['estimated_savings_vs_always_max_pct']:.1f}%",
+                "",
+                "Burns by host:",
+            ]
+        )
+        burns = summary.get("burns_by_host") or {}
+        if not burns:
+            lines.append("  (no host field on these rows)")
+        else:
+            for name, stats in burns.items():
+                marker = "  ← active" if name == active.get("host") else ""
+                tier_bits = ", ".join(
+                    f"{t}={stats['tasks_by_tier'][t]}"
+                    for t in TIERS
+                    if stats["tasks_by_tier"][t]
+                )
+                lines.append(
+                    f"  {name}: {stats['count']} task(s), "
+                    f"{stats['relative_units']:.1f} rel units ({tier_bits}){marker}"
+                )
+
+        lines.extend(["", f"Heavy-tier use on likely-light tasks: {summary['heavy_on_light_count']}"])
+        if summary["heavy_on_light_count"] == 0:
+            lines.append("  (none, or task_kind was not logged)")
+        else:
+            for row in summary["heavy_on_light"][:12]:
+                when = row.get("timestamp") or "unknown-time"
+                lines.append(
+                    f"  {when}  {row.get('host')}  {row.get('tier')} on task_kind={row.get('task_kind')}"
+                )
 
     if missing_ts:
         lines.append(
             f"\nNote: {missing_ts} log line(s) lacked a parseable timestamp and were excluded."
         )
 
-    actions = next_actions(summary, cfg)
-    lines.extend(["", "Next actions (automation complements the skill; it does not replace hosts):"])
-    for action in actions:
+    offers = optimize_offers(host_summary or summary, cfg, active)
+    lines.extend(["", "3. Optimize? (not applied yet)"])
+    for action in offers:
         lines.append(f"  • {action['title']}")
         lines.append(f"      {action['detail']}")
+    lines.append("")
+    lines.extend(optimize_prompt(active))
     lines.extend(
         [
             "",
-            "Apply local maps + boundary-gate flag + optional weekly digest:",
-            "  python3 scripts/apply_recommendations.py",
             "Percentages estimate this local log only; no savings are guaranteed.",
-            "No vendor billing or token API was accessed.",
+            "No vendor billing, picker, or token API was accessed.",
         ]
     )
     return "\n".join(lines)
@@ -194,14 +249,32 @@ def main(argv: List[str]) -> int:
         "--log",
         type=Path,
         default=None,
-        help="path to usage.jsonl or a JSON array (default: config usageLogPath or ~/.auto-model-router/logs/usage.jsonl)",
+        help="path to usage.jsonl or a JSON array",
     )
     parser.add_argument(
         "--host",
         action="append",
         dest="hosts",
         default=None,
-        help="filter to a host (repeatable). Default: all hosts in the log",
+        help="restrict the full-log section to a host (repeatable). Active host is detected separately",
+    )
+    parser.add_argument(
+        "--current-tier",
+        dest="current_tier",
+        default=None,
+        help="declare the active capability tier (fast|standard|reasoning|max)",
+    )
+    parser.add_argument(
+        "--current-model",
+        dest="current_model",
+        default=None,
+        help="declare the active picker/model label (not scraped)",
+    )
+    parser.add_argument(
+        "--active-host",
+        dest="active_host",
+        default=None,
+        help="declare the active host (default: detect from env/config/latest log)",
     )
     parser.add_argument(
         "--open",
@@ -256,25 +329,34 @@ def main(argv: List[str]) -> int:
                 break
 
     host_filter = list(args.hosts or [])
-    entries = filter_hosts(entries, host_filter)
-
     now = datetime.now(timezone.utc).astimezone()
     in_window, missing = filter_window(entries, days=args.days, now=now)
     if used_sample and args.days is not None and not in_window and entries:
         in_window = entries
         missing = []
 
-    summary = summarize(in_window)
+    active = detect_active(
+        cfg=cfg,
+        entries=in_window,
+        host=args.active_host or (host_filter[0] if len(host_filter) == 1 else None),
+        tier=args.current_tier,
+        model=args.current_model,
+    )
+    view = filter_hosts(in_window, host_filter) if host_filter else in_window
+    summary = summarize(view)
+    burn = active_burn(in_window, active)
     print(
         human_report(
             window_days=args.days,
             log_path=log_path,
             summary=summary,
+            burn=burn,
             used_sample=used_sample,
             missing_ts=len(missing),
             cfg=cfg,
             now=now,
             host_filter=host_filter,
+            active=active,
         )
     )
 
@@ -285,8 +367,11 @@ def main(argv: List[str]) -> int:
             "used_sample": used_sample,
             "missing_timestamp_count": len(missing),
             "host_filter": host_filter,
+            "active": active,
+            "active_burn": burn,
             "summary": summary,
-            "next_actions": next_actions(summary, cfg),
+            "optimize_offers": optimize_offers(burn.get("host_summary") or summary, cfg, active),
+            "applied": False,
             "rates_are": "illustrative relative example units, not vendor prices",
             "billing_api_accessed": False,
         }

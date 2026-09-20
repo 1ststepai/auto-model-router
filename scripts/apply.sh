@@ -23,7 +23,7 @@ Dashboard:
 Savings Desk audit (opt-in; local usage log only — not vendor billing):
   --enable-audit           Set auditOptIn=true (required before agents append usage.jsonl)
   --disable-audit          Set auditOptIn=false
-  --apply-recommendations  Write local tier-map stubs + boundaryGatedConfirms=true
+  --apply-recommendations  After audit: yes, write local maps + boundaryGatedConfirms=true
 
 Weekly review (opt-in; local usage log only — not vendor billing):
   --enable-weekly-review   Set weeklyReview=true
@@ -36,10 +36,11 @@ Preference file: ~/.auto-model-router/config.json
     "hosts": ["cursor", "claude-code", "codex"], "usageLogPath": "",
     "boundaryGatedConfirms": false }
 
-Try Savings Desk:
+Try Savings Desk (detect → audit → ask → yes):
   ./scripts/apply.sh --enable-audit --no-open
-  python3 ~/.auto-model-router/audit_usage.py --force
-  python3 ~/.auto-model-router/apply_recommendations.py --force
+  python3 ~/.auto-model-router/detect_active.py
+  python3 ~/.auto-model-router/audit_usage.py
+  python3 ~/.auto-model-router/apply_recommendations.py --yes   # only after you want to optimize
 USAGE
 }
 
@@ -262,6 +263,13 @@ if [[ -f "$AUDIT_SRC" ]]; then
   chmod +x "$AUDIT_DEST"
   echo "  audit → $AUDIT_DEST"
 fi
+DETECT_SRC="$ROOT/scripts/detect_active.py"
+DETECT_DEST="$AMR_HOME/detect_active.py"
+if [[ -f "$DETECT_SRC" ]]; then
+  cp "$DETECT_SRC" "$DETECT_DEST"
+  chmod +x "$DETECT_DEST"
+  echo "  detect active → $DETECT_DEST"
+fi
 if [[ -f "$APPLY_REC_SRC" ]]; then
   cp "$APPLY_REC_SRC" "$APPLY_REC_DEST"
   chmod +x "$APPLY_REC_DEST"
@@ -287,7 +295,10 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
   "auditOptIn": false,
   "hosts": ["cursor", "claude-code", "codex"],
   "usageLogPath": "",
-  "boundaryGatedConfirms": false
+  "boundaryGatedConfirms": false,
+  "currentHost": "",
+  "currentTier": "",
+  "currentModel": ""
 }' > "$CONFIG_FILE"
   echo "  created config → $CONFIG_FILE"
 fi
@@ -364,7 +375,7 @@ if [[ "$APPLY_RECOMMENDATIONS" -eq 1 ]]; then
   elif [[ -f "$APPLY_REC_DEST" ]]; then
     echo
     echo "Applying Savings Desk recommendations (local maps + boundary-gate flag)..."
-    python3 "$APPLY_REC_DEST" --dest "$AMR_HOME" || true
+    python3 "$APPLY_REC_DEST" --yes --dest "$AMR_HOME" || true
   else
     echo "  apply_recommendations.py not installed; skip --apply-recommendations"
   fi

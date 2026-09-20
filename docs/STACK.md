@@ -24,8 +24,9 @@ A host-neutral pairing checklist lives at [`scripts/context_budget_checklist.md`
 
 If you **opt in** (`auditOptIn` in `~/.auto-model-router/config.json`), agents may append a non-sensitive line to `usage.jsonl`. Savings Desk then:
 
-1. Reports burns by host, confirm/override rates, heavy-tier use on likely-light `task_kind`s, and relative units vs always-max.
-2. Applies local recommendations: `cursor-tier-map.json` plus Claude/Codex stubs, `boundaryGatedConfirms=true`, optional weekly digest.
+1. Detects the active host/tier/model from local context (declared flags, config, or the latest `usage.jsonl` row — not a live vendor picker).
+2. Reports that pick’s burn, then the rest of the local log.
+3. Asks “optimize?” — only after yes: `cursor-tier-map.json` plus Claude/Codex stubs, `boundaryGatedConfirms=true`, optional weekly digest.
 
 Relative savings come from that local log first. Optional invoice/CSV reconcile is a later, paid-desk idea — not in this MVP, and never a silent vendor scrape.
 

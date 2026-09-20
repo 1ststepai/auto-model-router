@@ -37,39 +37,82 @@
     th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); }
     .cta, .pro { border: 1px dashed var(--line); border-radius: .7rem; padding: 1rem 1.1rem; margin: 1.2rem 0; }
     .pro { border-style: solid; }
+    .active-box { border: 2px solid var(--accent); border-radius: .7rem; padding: 1rem 1.1rem; margin: 1rem 0 1.4rem; }
+    .active-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .6rem; margin: .6rem 0; }
+    .active-grid label { display: flex; flex-direction: column; gap: .25rem; font-size: .9rem; }
     .pill { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border: 1px solid #888; border-radius: 999px; padding: .1rem .5rem; }
     code, kbd { font-family: ui-monospace, monospace; }
     h1 { margin-bottom: .35rem; }
     .sub { margin-top: 0; }
+    details.pro { margin-top: 2.5rem; }
+    .step { font-weight: 750; color: var(--accent); }
   </style>
 </head>
 <body>
   <main>
-    <p class="pill">Savings Desk · local MVP</p>
-    <h1>Auto Model Router — Savings Desk</h1>
-    <p class="sub muted">Opt in to a local usage audit, then apply automation that writes host tier maps. Complements the skill; does not replace Cursor, Claude Code, Codex, or Gemini-style hosts.</p>
-    <p class="banner">Estimates from your routing log, not live Cursor/Claude/OpenAI/Gemini billing. No vendor meter is scraped.</p>
+    <p class="pill">Savings Desk · local tooling</p>
+    <h1>Audit the model you are using now</h1>
+    <p class="sub muted">Detect the active picker → audit that burn from the local log → ask before optimizing. Complements the skill; does not replace Cursor, Claude Code, Codex, or Gemini-style hosts.</p>
+    <p class="banner">Live Cursor/Claude/OpenAI pickers and meters cannot be read. Declare the current model/tier, or we use the latest local <code>usage.jsonl</code> row. No vendor scrape.</p>
     <div class="consent">
       <strong>Consent / what is collected.</strong> Audit is off until <code>auditOptIn</code> is true in <code>~/.auto-model-router/config.json</code>.
       Collected: <code>tier</code>, <code>host</code>, <code>confirmed</code>/<code>overridden</code>, <code>task_kind</code>, optional <code>gate</code> and <code>timestamp</code>.
       <em>Never:</em> prompts, code, secrets, customer data, vendor credentials, or billing APIs.
       Relative units: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>.
     </div>
-    <p class="muted">AMR = model/effort discipline. Context lean tools (lean.ctx, ponytail, or yours) = send less context — optional peers, not bundled IP. Together they are a usage-discipline stack, not a savings guarantee. See <code>docs/STACK.md</code>.</p>
 
-    <h2>Load a routing log</h2>
-    <p>Load the included sample, choose a JSON/JSONL file, or paste an array of decisions. Optional <code>gate</code> (<code>auto_continue</code>, <code>confirm</code>, <code>hard_gate</code>) is kept for the desk and ignored by the raw estimator totals.</p>
+    <section class="active-box" id="active-box">
+      <p class="step">1. What are you using right now?</p>
+      <p class="muted" id="active-detect">Load a log to infer the latest host/tier, or declare it here. This is not the live vendor picker.</p>
+      <div class="active-grid">
+        <label>Host
+          <select id="active-host" aria-label="Active host">
+            <option value="">(detect from latest log row)</option>
+            <option value="cursor">cursor</option>
+            <option value="claude-code">claude-code</option>
+            <option value="codex">codex</option>
+            <option value="gemini">gemini</option>
+          </select>
+        </label>
+        <label>Current tier
+          <select id="active-tier" aria-label="Current tier">
+            <option value="">(detect from latest log row)</option>
+            <option value="fast">fast</option>
+            <option value="standard">standard</option>
+            <option value="reasoning">reasoning</option>
+            <option value="max">max</option>
+          </select>
+        </label>
+        <label>Current model / picker label
+          <input id="active-model" type="text" placeholder="optional — e.g. the label in your picker">
+        </label>
+      </div>
+      <button type="button" id="use-latest">Use latest log row</button>
+    </section>
+
+    <h2><span class="step">2.</span> Local routing log</h2>
+    <p>Load the included sample, choose a JSON/JSONL file, or paste decisions. The audit below focuses on the active host first.</p>
     <button id="sample" class="primary">Load sample log</button>
     <input id="file" type="file" accept="application/json,.json,.jsonl,text/plain">
     <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z","host":"cursor","task_kind":"rename"}]'></textarea>
-    <br><button id="calculate">Calculate estimates</button>
+    <br><button id="calculate">Audit this log</button>
     <span id="status" class="muted" role="status"></span>
 
     <section id="results" hidden>
-      <h2>Hosts filter</h2>
+      <h2>Active model burn</h2>
+      <p id="active-summary" class="muted"></p>
+      <div class="cards">
+        <div class="card">Active host tasks<span id="active-tasks" class="value">—</span></div>
+        <div class="card">Active host vs always-max<span id="active-max-saved" class="value">—</span></div>
+        <div class="card">Current-tier tasks<span id="active-tier-tasks" class="value">—</span></div>
+        <div class="card">Current-tier units<span id="active-tier-units" class="value">—</span></div>
+        <div class="card">Heavy on light (this host)<span id="active-heavy" class="value">—</span></div>
+      </div>
+
+      <h2>All hosts in this log</h2>
       <div id="filters" class="filters"></div>
 
-      <h2>Relative savings</h2>
+      <h3>Relative savings (filtered view)</h3>
       <div class="cards">
         <div class="card">Tasks<span id="tasks" class="value">—</span></div>
         <div class="card">Vs always-reasoning<span id="reasoning-saved" class="value">—</span></div>
@@ -98,26 +141,28 @@
       </table>
 
       <div class="cta" id="automation">
-        <h2>Enable automation</h2>
-        <p>After you opt in, apply recommendations writes local <code>cursor-tier-map.json</code> (plus Claude/Codex stubs), sets <code>boundaryGatedConfirms=true</code>, and can turn on the weekly digest. AMR still does not flip native Auto.</p>
-        <pre id="cta-commands">./scripts/apply.sh --enable-audit --no-open
+        <h2><span class="step">3.</span> Optimize this pick?</h2>
+        <p>Only after you say yes: enable boundary-gated confirms, write local tier→model maps, and optionally turn on the weekly digest. AMR still does not flip native Auto.</p>
+        <button type="button" id="optimize-yes" class="primary">Yes, show apply commands</button>
+        <button type="button" id="optimize-no">Not now</button>
+        <p id="optimize-status" class="muted"></p>
+        <div id="optimize-commands" hidden>
+          <pre id="cta-commands">python3 scripts/detect_active.py
 python3 scripts/audit_usage.py --force
-python3 scripts/apply_recommendations.py --enable-weekly-review</pre>
-        <button type="button" id="copy-cta">Copy commands</button>
-        <p class="muted">Next actions the CLI will spell out: enable boundary gates · map fast→X · turn on weekly digest.</p>
+python3 scripts/apply_recommendations.py --yes --enable-weekly-review</pre>
+          <button type="button" id="copy-cta">Copy commands</button>
+          <p class="muted">--yes is required. Without it, apply_recommendations.py only reminds you to audit first.</p>
+        </div>
       </div>
 
-      <section class="pro" aria-labelledby="pro-title">
-        <p class="pill">Savings Desk Pro · stub</p>
-        <h2 id="pro-title">Paid desk (not in this MVP)</h2>
-        <p><strong>Free here:</strong> opt-in local audit, CLI report, weekly digest, apply local maps, this dashboard.</p>
-        <p><strong>Paid placeholder:</strong> exportable report and team rollup. No checkout on this page — MIT open-core stays free.</p>
+      <pre id="json"></pre>
+
+      <details class="pro" id="pro-panel">
+        <summary>Later: team export / rollup (not part of this flow)</summary>
+        <p>The open desk is the detect → audit → ask → apply loop above. A future paid export or team rollup would sit here. No checkout on this page.</p>
         <button type="button" disabled title="Not available in the open MVP">Export report (Pro)</button>
         <button type="button" disabled title="Not available in the open MVP">Team rollup (Pro)</button>
-        <p class="muted">Solo / team pricing TBD. Invoice or CSV reconcile is a later opt-in you would upload — never a silent vendor scrape.</p>
-      </section>
-
-      <pre id="json"></pre>
+      </details>
     </section>
   </main>
 <script>
@@ -144,6 +189,37 @@ const $ = (id) => document.getElementById(id);
 const RANK = Object.fromEntries(TIERS.map((t, i) => [t, i]));
 let ALL_ROWS = [];
 let SELECTED_HOSTS = new Set();
+let DETECTED = { host: "", tier: "", source: "none" };
+
+function latestRow(rows) {
+  const dated = rows.map((row, i) => ({ row, i, t: Date.parse(row.timestamp || "") })).filter(x => !Number.isNaN(x.t));
+  if (dated.length) {
+    dated.sort((a, b) => a.t - b.t || a.i - b.i);
+    return dated[dated.length - 1].row;
+  }
+  return rows[rows.length - 1] || null;
+}
+function declaredActive() {
+  const host = $("active-host").value || DETECTED.host;
+  const tier = $("active-tier").value || DETECTED.tier;
+  const model = ($("active-model").value || "").trim();
+  const sources = [];
+  if ($("active-host").value) sources.push("declared host");
+  else if (DETECTED.host) sources.push("latest log host");
+  if ($("active-tier").value) sources.push("declared tier");
+  else if (DETECTED.tier) sources.push("latest log tier");
+  if (model) sources.push("declared model label");
+  return { host, tier, model, sources: sources.join(", ") || "undeclared" };
+}
+function applyDetected() {
+  const last = latestRow(ALL_ROWS);
+  DETECTED = last
+    ? { host: (last.host || "") + "", tier: last.tier || "", source: "latest usage.jsonl row" }
+    : { host: "", tier: "", source: "none" };
+  $("active-detect").textContent = last
+    ? `Latest local log row: host=${DETECTED.host || "?"} tier=${DETECTED.tier || "?"}. Not a live vendor picker.`
+    : "No log rows yet. Declare host/tier above.";
+}
 
 function entries(payload) {
   if (Array.isArray(payload)) return payload;
@@ -241,8 +317,20 @@ function renderFilters() {
   if (all) all.addEventListener("click", () => { SELECTED_HOSTS = new Set(); renderFilters(); paint(); });
 }
 function paint() {
+  if (!ALL_ROWS.length) return;
   const result = calculate(filteredRows());
   $("results").hidden = false;
+  const active = declaredActive();
+  const hostRows = active.host ? ALL_ROWS.filter(r => ((r.host || "unspecified") + "") === active.host) : ALL_ROWS;
+  const hostResult = hostRows.length ? calculate(hostRows) : null;
+  const tierRows = active.tier && hostRows.length ? hostRows.filter(r => r.tier === active.tier) : [];
+  const tierUnits = tierRows.reduce((sum, r) => sum + (RATES[r.tier] || 0), 0);
+  $("active-summary").textContent = `Active: host=${active.host || "unknown"} · tier=${active.tier || "unknown"} · model=${active.model || "undeclared"} · source=${active.sources}. Live meters not readable.`;
+  $("active-tasks").textContent = hostResult ? hostResult.task_count : "0";
+  $("active-max-saved").textContent = hostResult ? hostResult.estimated_savings_vs_always_max_pct + "%" : "—";
+  $("active-tier-tasks").textContent = String(tierRows.length);
+  $("active-tier-units").textContent = String(tierUnits);
+  $("active-heavy").textContent = hostResult ? hostResult.heavy_on_light_count : "0";
   $("tasks").textContent = result.task_count;
   $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct + "%";
   $("max-saved").textContent = result.estimated_savings_vs_always_max_pct + "%";
@@ -264,9 +352,12 @@ function paint() {
 function render(rows) {
   ALL_ROWS = rows;
   SELECTED_HOSTS = new Set();
+  applyDetected();
+  const active = declaredActive();
+  if (active.host) SELECTED_HOSTS = new Set([active.host]);
   renderFilters();
   paint();
-  $("status").textContent = " Loaded successfully. Local estimates only.";
+  $("status").textContent = " Loaded successfully. Active-model audit first; local estimates only.";
 }
 function loadText(text) {
   try { render(parseInput(text)); }
@@ -292,6 +383,26 @@ $("file").addEventListener("change", event => {
   const reader = new FileReader();
   reader.onload = () => { $("input").value = reader.result; loadText(reader.result); };
   reader.readAsText(file);
+});
+$("active-host").addEventListener("change", paint);
+$("active-tier").addEventListener("change", paint);
+$("active-model").addEventListener("input", paint);
+$("use-latest").addEventListener("click", () => {
+  $("active-host").value = "";
+  $("active-tier").value = "";
+  applyDetected();
+  const active = declaredActive();
+  SELECTED_HOSTS = active.host ? new Set([active.host]) : new Set();
+  renderFilters();
+  paint();
+});
+$("optimize-yes").addEventListener("click", () => {
+  $("optimize-commands").hidden = false;
+  $("optimize-status").textContent = "Yes — apply only writes local maps and policy flags. It does not flip the host picker.";
+});
+$("optimize-no").addEventListener("click", () => {
+  $("optimize-commands").hidden = true;
+  $("optimize-status").textContent = "Okay. Keep the audit; nothing was applied.";
 });
 $("copy-cta").addEventListener("click", async () => {
   const text = $("cta-commands").textContent;

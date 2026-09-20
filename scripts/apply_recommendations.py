@@ -18,10 +18,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from amr_usage import (
     DEFAULT_HOSTS,
+    detect_active,
     honesty_lines,
     load_config,
     load_usage_entries,
     next_actions,
+    optimize_prompt,
     resolve_usage_log,
     sample_log_candidates,
     save_config,
@@ -209,6 +211,16 @@ def main(argv: List[str]) -> int:
         action="store_true",
         help="update config / print actions only; do not write tier maps",
     )
+    parser.add_argument(
+        "--yes",
+        "--optimize",
+        dest="yes",
+        action="store_true",
+        help="required to apply: you already audited and said yes to optimize",
+    )
+    parser.add_argument("--host", dest="active_host", default=None, help="active host to mention")
+    parser.add_argument("--current-tier", dest="current_tier", default=None)
+    parser.add_argument("--current-model", dest="current_model", default=None)
     args = parser.parse_args(argv[1:])
 
     cfg = load_config()
@@ -216,8 +228,9 @@ def main(argv: List[str]) -> int:
         print(
             "Refusing to apply automation before audit consent.\n"
             "Opt in first: ./scripts/apply.sh --enable-audit\n"
-            "Then: python3 scripts/audit_usage.py && python3 scripts/apply_recommendations.py\n"
-            "Or pass --force for a local dry run of the map stubs.",
+            "Then: python3 scripts/audit_usage.py\n"
+            "If you want to optimize: python3 scripts/apply_recommendations.py --yes\n"
+            "Or pass --force --yes for a local write of the map stubs.",
             file=sys.stderr,
         )
         return 1
@@ -226,9 +239,38 @@ def main(argv: List[str]) -> int:
     dest = (args.dest or (Path.home() / ".auto-model-router")).expanduser()
     entries, log_path, used_sample = load_entries_for_audit(cfg, args.log, args.sample)
     summary = summarize(entries)
+    active = detect_active(
+        cfg=cfg,
+        entries=entries,
+        host=args.active_host,
+        tier=args.current_tier,
+        model=args.current_model,
+    )
+
+    if not args.yes and not args.dry_run:
+        print("Auto Model Router — optimize is gated on a yes")
+        print(f"Log: {log_path}" + (" (sample)" if used_sample else ""))
+        print(
+            f"Active: host={active.get('host') or '?'}  "
+            f"tier={active.get('tier') or '?'}  "
+            f"model={active.get('model') or 'undeclared'}"
+        )
+        print()
+        print("Audit first if you have not: python3 scripts/audit_usage.py")
+        print()
+        for line in optimize_prompt(active):
+            print(line)
+        print()
+        print("Refusing to write maps or flip policy flags without --yes.")
+        return 2
 
     print("Auto Model Router — apply Savings Desk recommendations")
     print(f"Log: {log_path}" + (" (sample)" if used_sample else ""))
+    print(
+        f"Active: host={active.get('host') or '?'}  "
+        f"tier={active.get('tier') or '?'}  "
+        f"model={active.get('model') or 'undeclared'}"
+    )
     print(f"Maps directory: {dest}")
     print()
     for line in honesty_lines():

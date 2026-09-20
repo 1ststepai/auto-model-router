@@ -5,5 +5,8 @@
   "hosts": ["cursor", "claude-code", "codex"],
   "usageLogPath": "",
   "boundaryGatedConfirms": false,
-  "comment": "Copy to ~/.auto-model-router/config.json. usageLogPath empty means ~/.auto-model-router/logs/usage.jsonl. auditOptIn is required before agents append usage.jsonl. Collected if opted in: timestamp, tier, suggested_tier, confirmed, overridden, host, task_kind, gate. Never: prompts, code, secrets, vendor credentials, billing APIs."
+  "currentHost": "",
+  "currentTier": "",
+  "currentModel": "",
+  "comment": "Copy to ~/.auto-model-router/config.json. usageLogPath empty means ~/.auto-model-router/logs/usage.jsonl. auditOptIn is required before agents append usage.jsonl. currentHost/currentTier/currentModel are optional declared picker context (not scraped). Flow: detect active model → audit that usage → ask optimize? → apply only with --yes. Collected if opted in: timestamp, tier, suggested_tier, confirmed, overridden, host, task_kind, gate. Never: prompts, code, secrets, vendor credentials, billing APIs."
 }

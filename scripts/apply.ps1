@@ -28,7 +28,7 @@ Dashboard:
 Savings Desk audit (opt-in; local usage log only — not vendor billing):
   -EnableAudit            Set auditOptIn=true (required before agents append usage.jsonl)
   -DisableAudit           Set auditOptIn=false
-  -ApplyRecommendations   Write local tier-map stubs + boundaryGatedConfirms=true
+  -ApplyRecommendations   After audit: yes, write local maps + boundaryGatedConfirms=true
 
 Weekly review (opt-in; local usage log only — not vendor billing):
   -EnableWeeklyReview     Set weeklyReview=true
@@ -41,10 +41,11 @@ Preference file: `$env:USERPROFILE\.auto-model-router\config.json
     "hosts": ["cursor", "claude-code", "codex"], "usageLogPath": "",
     "boundaryGatedConfirms": false }
 
-Try Savings Desk:
+Try Savings Desk (detect → audit → ask → yes):
   .\scripts\apply.ps1 -EnableAudit -NoOpen
-  python `$env:USERPROFILE\.auto-model-router\audit_usage.py --force
-  python `$env:USERPROFILE\.auto-model-router\apply_recommendations.py --force
+  python `$env:USERPROFILE\.auto-model-router\detect_active.py
+  python `$env:USERPROFILE\.auto-model-router\audit_usage.py
+  python `$env:USERPROFILE\.auto-model-router\apply_recommendations.py --yes
 "@
   exit 0
 }
@@ -66,6 +67,7 @@ $WeeklySrc = Join-Path $Root "scripts\weekly_review.py"
 $AmrUsageSrc = Join-Path $Root "scripts\amr_usage.py"
 $AuditSrc = Join-Path $Root "scripts\audit_usage.py"
 $ApplyRecSrc = Join-Path $Root "scripts\apply_recommendations.py"
+$DetectSrc = Join-Path $Root "scripts\detect_active.py"
 
 if (-not (Test-Path -LiteralPath $SkillSrc)) {
   Write-Error "Missing skill at $SkillSrc"
@@ -84,6 +86,7 @@ $WeeklyDest = Join-Path $AmrHome "weekly_review.py"
 $AmrUsageDest = Join-Path $AmrHome "amr_usage.py"
 $AuditDest = Join-Path $AmrHome "audit_usage.py"
 $ApplyRecDest = Join-Path $AmrHome "apply_recommendations.py"
+$DetectDest = Join-Path $AmrHome "detect_active.py"
 $TaskName = "AutoModelRouterWeeklyReview"
 
 function Read-Config {
@@ -94,6 +97,9 @@ function Read-Config {
     hosts = @("cursor", "claude-code", "codex")
     usageLogPath = ""
     boundaryGatedConfirms = $false
+    currentHost = ""
+    currentTier = ""
+    currentModel = ""
   }
   if (Test-Path -LiteralPath $ConfigFile) {
     try {
@@ -117,6 +123,9 @@ function Read-Config {
       if ($null -ne $parsed.hosts) {
         $cfg.hosts = @($parsed.hosts)
       }
+      if ($null -ne $parsed.currentHost) { $cfg.currentHost = [string]$parsed.currentHost }
+      if ($null -ne $parsed.currentTier) { $cfg.currentTier = [string]$parsed.currentTier }
+      if ($null -ne $parsed.currentModel) { $cfg.currentModel = [string]$parsed.currentModel }
     } catch {
       # keep defaults
     }
@@ -134,6 +143,9 @@ function Write-Config {
     hosts = @($Cfg.hosts)
     usageLogPath = [string]$Cfg.usageLogPath
     boundaryGatedConfirms = [bool]$Cfg.boundaryGatedConfirms
+    currentHost = [string]$Cfg.currentHost
+    currentTier = [string]$Cfg.currentTier
+    currentModel = [string]$Cfg.currentModel
   }
   $json = ($obj | ConvertTo-Json -Depth 4) + [Environment]::NewLine
   [System.IO.File]::WriteAllText($ConfigFile, $json)
@@ -216,6 +228,10 @@ if (Test-Path -LiteralPath $ApplyRecSrc) {
   Copy-Item -LiteralPath $ApplyRecSrc -Destination $ApplyRecDest -Force
   Write-Host "  apply recommendations → $ApplyRecDest"
 }
+if (Test-Path -LiteralPath $DetectSrc) {
+  Copy-Item -LiteralPath $DetectSrc -Destination $DetectDest -Force
+  Write-Host "  detect active → $DetectDest"
+}
 $ExamplesDest = Join-Path $AmrHome "examples"
 New-Item -ItemType Directory -Force -Path $ExamplesDest | Out-Null
 foreach ($map in @(
@@ -239,6 +255,9 @@ if (-not (Test-Path -LiteralPath $ConfigFile)) {
     hosts = @("cursor", "claude-code", "codex")
     usageLogPath = ""
     boundaryGatedConfirms = $false
+    currentHost = ""
+    currentTier = ""
+    currentModel = ""
   })
   Write-Host "  created config → $ConfigFile"
 }
@@ -320,7 +339,7 @@ if ($ApplyRecommendations) {
   } elseif (Test-Path -LiteralPath $ApplyRecDest) {
     Write-Host ""
     Write-Host "Applying Savings Desk recommendations (local maps + boundary-gate flag)..."
-    & python $ApplyRecDest --dest $AmrHome
+    & python $ApplyRecDest --yes --dest $AmrHome
   } else {
     Write-Host "  apply_recommendations.py not installed; skip -ApplyRecommendations"
   }

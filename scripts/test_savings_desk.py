@@ -31,7 +31,7 @@ def main() -> int:
 
     sample = json.loads((DEMO / "sample_usage_log.json").read_text(encoding="utf-8"))
     sys.path.insert(0, str(SCRIPTS))
-    from amr_usage import LIGHT_TASK_KINDS, next_actions, summarize  # noqa: WPS433
+    from amr_usage import LIGHT_TASK_KINDS, detect_active, next_actions, summarize  # noqa: WPS433
 
     summary = summarize(sample)
     if summary["task_count"] != 14:
@@ -48,7 +48,17 @@ def main() -> int:
     if not kinds <= set(LIGHT_TASK_KINDS):
         errors.append(f"unexpected heavy-on-light kinds: {kinds}")
 
-    # Consent gate without HOME config
+    inferred = detect_active(cfg={}, entries=sample)
+    if inferred.get("host") != "cursor" or inferred.get("tier") != "fast":
+        errors.append(f"latest sample row should infer cursor/fast, got {inferred}")
+    if inferred.get("live_meter_read") or inferred.get("live_picker_read"):
+        errors.append("detect_active must not claim a live meter/picker read")
+    declared = detect_active(cfg={}, entries=sample, host="claude-code", tier="reasoning", model="my-sonnet")
+    if declared.get("host") != "claude-code" or declared.get("tier") != "reasoning":
+        errors.append(f"cli declare should win, got {declared}")
+    if declared.get("sources", {}).get("host") != "cli --host":
+        errors.append(f"expected cli host source, got {declared.get('sources')}")
+
     env = os.environ.copy()
     with tempfile.TemporaryDirectory() as tmp:
         home = Path(tmp)
@@ -62,29 +72,71 @@ def main() -> int:
         if rec_denied.returncode != 1 or "audit consent" not in rec_denied.stderr:
             errors.append(f"apply_recommendations without consent should refuse: {rec_denied.stderr}")
 
+        detect = run(
+            [sys.executable, str(SCRIPTS / "detect_active.py"), "--sample", "--json"],
+            env=env,
+        )
+        if detect.returncode != 0:
+            errors.append(f"detect_active --sample failed: {detect.stderr}")
+        detected = json.loads(detect.stdout)
+        if detected.get("host") != "cursor" or detected.get("live_meter_read"):
+            errors.append(f"detect_active sample should be cursor from log, got {detected}")
+
         forced = run(
-            [sys.executable, str(SCRIPTS / "audit_usage.py"), "--force", "--sample", "--json"],
+            [
+                sys.executable,
+                str(SCRIPTS / "audit_usage.py"),
+                "--force",
+                "--sample",
+                "--json",
+                "--current-tier",
+                "max",
+                "--active-host",
+                "cursor",
+            ],
             env=env,
         )
         if forced.returncode != 0:
             errors.append(f"audit --force --sample failed: {forced.stderr}")
-        if "Savings Desk audit" not in forced.stdout:
-            errors.append("audit human report missing title")
-        if "Never collected" not in forced.stdout:
-            errors.append("audit should document never-collected fields")
-        if "--- JSON ---" not in forced.stdout:
-            errors.append("audit --json missing JSON block")
+        if "Active model" not in forced.stdout:
+            errors.append("audit should lead with the active model")
+        if "Optimize?" not in forced.stdout:
+            errors.append("audit should ask optimize? before applying")
+        if "apply_recommendations.py --yes" not in forced.stdout:
+            errors.append("audit should require --yes to apply")
         payload = json.loads(forced.stdout.split("--- JSON ---", 1)[1])
-        if payload.get("used_sample") is not True:
-            errors.append("sample audit should set used_sample")
+        if payload.get("active", {}).get("tier") != "max":
+            errors.append(f"active tier should be declared max, got {payload.get('active')}")
+        if payload.get("applied") is not False:
+            errors.append("audit must not apply automation")
         if payload.get("billing_api_accessed") is not False:
             errors.append("audit JSON claimed a billing API")
+        burn = payload.get("active_burn") or {}
+        if burn.get("current_tier_task_count", 0) < 1:
+            errors.append("cursor+max should have at least the docs row")
+
+        no_yes = run(
+            [
+                sys.executable,
+                str(SCRIPTS / "apply_recommendations.py"),
+                "--force",
+                "--sample",
+                "--dest",
+                str(home / ".auto-model-router"),
+            ],
+            env=env,
+        )
+        if no_yes.returncode != 2 or "without --yes" not in no_yes.stdout:
+            errors.append(f"apply without --yes should refuse writes: {no_yes.returncode} {no_yes.stdout}")
+        if (home / ".auto-model-router" / "cursor-tier-map.json").is_file():
+            errors.append("maps must not be written before --yes")
 
         rec = run(
             [
                 sys.executable,
                 str(SCRIPTS / "apply_recommendations.py"),
                 "--force",
+                "--yes",
                 "--sample",
                 "--enable-weekly-review",
                 "--dest",
@@ -93,25 +145,17 @@ def main() -> int:
             env=env,
         )
         if rec.returncode != 0:
-            errors.append(f"apply_recommendations --force failed: {rec.stderr}\n{rec.stdout}")
+            errors.append(f"apply_recommendations --yes --force failed: {rec.stderr}\n{rec.stdout}")
         dest = home / ".auto-model-router"
         for name in ("cursor-tier-map.json", "claude-tier-map.json", "codex-tier-map.json"):
             path = dest / name
             if not path.is_file():
                 errors.append(f"missing written map {path}")
-            else:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if "fast" not in data:
-                    errors.append(f"{name} missing fast mapping")
-        cfg_path = dest / "config.json"
-        if not cfg_path.is_file():
-            errors.append("apply_recommendations did not write config.json")
-        else:
-            cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-            if cfg.get("boundaryGatedConfirms") is not True:
-                errors.append("boundaryGatedConfirms not set")
-            if cfg.get("weeklyReview") is not True:
-                errors.append("weeklyReview not set by --enable-weekly-review")
+        cfg = json.loads((dest / "config.json").read_text(encoding="utf-8"))
+        if cfg.get("boundaryGatedConfirms") is not True:
+            errors.append("boundaryGatedConfirms not set after --yes")
+        if cfg.get("weeklyReview") is not True:
+            errors.append("weeklyReview not set by --enable-weekly-review")
 
         actions = next_actions(summary, {"auditOptIn": True, "boundaryGatedConfirms": True, "weeklyReview": True})
         titles = " ".join(a["title"] for a in actions)
@@ -120,24 +164,27 @@ def main() -> int:
 
     dash = (DEMO / "dashboard.html").read_text(encoding="utf-8")
     for needle in (
-        "Savings Desk",
-        "hosts filter",
-        "Switch-downs",
-        "Enable automation",
-        "Savings Desk Pro",
-        "Export report (Pro)",
-        "Never:",
+        "What are you using right now?",
+        "Active model burn",
+        "Optimize this pick?",
+        "Yes, show apply commands",
+        "--yes",
         "auditOptIn",
+        "Never:",
     ):
         if needle not in dash:
             errors.append(f"dashboard.html missing {needle!r}")
+    pro_at = dash.find("Export report (Pro)")
+    active_at = dash.find("What are you using right now?")
+    if pro_at != -1 and active_at != -1 and pro_at < active_at:
+        errors.append("dashboard must not lead with the Pro upsell")
+    if "<details" not in dash or "pro-panel" not in dash:
+        errors.append("Pro copy should be collapsed at the bottom, not the lead")
 
     for rel in (
         "docs/SAVINGS_DESK.md",
         "docs/STACK.md",
-        "docs/boundary-gated-confirms.md",
-        "scripts/context_budget_checklist.md",
-        "integrations/cursor-tier-map.example.json",
+        "scripts/detect_active.py",
         "integrations/config.example.json",
     ):
         if not (ROOT / rel).is_file():
@@ -148,7 +195,7 @@ def main() -> int:
             print(f"ERROR {line}", file=sys.stderr)
         print(f"Failed: {len(errors)} problem(s).", file=sys.stderr)
         return 1
-    print("OK: Savings Desk audit, apply-recommendations, and dashboard copy validated.")
+    print("OK: Savings Desk detect → audit → ask → yes path validated.")
     return 0
 
 

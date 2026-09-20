@@ -127,13 +127,12 @@ If `weeklyReview` is `true` in `~/.auto-model-router/config.json`, or the user a
 
 ## Savings Desk (opt-in audit → automation)
 
-If the user opted in (`auditOptIn=true`) or asks to audit usage / show Savings Desk:
+If the user opted in (`auditOptIn=true`) or asks to audit usage / show Savings Desk, follow this order — do not lead with a paid upsell or apply automation unprompted:
 
-1. Do not invent vendor bills. Run `python3 ~/.auto-model-router/audit_usage.py` (or `python3 scripts/audit_usage.py --force` from a clone).
-2. Summarize burns by host, confirm/override rates, heavy-tier use on likely-light `task_kind`s, and relative units vs always-max. Label sample-log fallbacks as sample.
-3. Offer to apply recommendations (`python3 scripts/apply_recommendations.py`) which writes local `cursor-tier-map.json` plus Claude/Codex stubs, sets `boundaryGatedConfirms=true`, and can enable the weekly digest. This complements the skill; it does not replace hosts or flip native Auto.
-4. Spell out remaining actions: enable boundary gates, map fast→X (fill picker placeholders), turn on weekly digest.
-5. Point at `~/.auto-model-router/demo/dashboard.html` (or `demo/dashboard.html`) for the hosts-filter UI. The “Savings Desk Pro” panel is a labeled stub — no checkout.
+1. Detect the active model. Ask which host/picker they are on, or run `python3 scripts/detect_active.py` (`--current-tier`, `--current-model`, `--host`). Live Cursor/Claude/OpenAI pickers and meters cannot be read; use declared values or the latest local `usage.jsonl` row.
+2. Audit that pick first: `python3 ~/.auto-model-router/audit_usage.py` (or `python3 scripts/audit_usage.py --force`). Summarize the active host’s burn, then the rest of the local log. Label sample-log fallbacks as sample.
+3. Ask “Optimize this?” (boundary-gated confirms, local tier→model map, weekly digest). Only if they say yes, run `python3 scripts/apply_recommendations.py --yes`.
+4. Point at `demo/dashboard.html` for the same sequence. Do not lead with a Pro panel.
 
 See [`docs/SAVINGS_DESK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/SAVINGS_DESK.md) and [`docs/STACK.md`](https://github.com/1ststepai/auto-model-router/blob/main/docs/STACK.md). Context-lean peers (lean.ctx, ponytail, or any packer) stay optional; a host-neutral checklist is `scripts/context_budget_checklist.md`.
 

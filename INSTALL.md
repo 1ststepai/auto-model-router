@@ -127,16 +127,18 @@ Savings Desk is the consent → audit → automate path. It reads **local** `usa
 ./scripts/apply.sh --enable-audit --no-open
 # Windows: .\scripts\apply.ps1 -EnableAudit -NoOpen
 
-# 2. Audit (uses the sample log, labeled as sample, if yours is empty)
+# 2. Detect the active pick (declared --current-tier / config / latest usage.jsonl)
+python3 scripts/detect_active.py
+# Live vendor pickers cannot be read.
+
+# 3. Audit that pick first (sample log is labeled if yours is empty)
 python3 scripts/audit_usage.py --force
-# or after apply: python3 ~/.auto-model-router/audit_usage.py --force
+# or: python3 scripts/audit_usage.py --force --current-tier max --host cursor
 
-# 3. Apply automation: local cursor-tier-map.json + Claude/Codex stubs,
-#    boundaryGatedConfirms=true, optional weekly digest
-python3 scripts/apply_recommendations.py --enable-weekly-review
-# or: ./scripts/apply.sh --enable-audit --apply-recommendations --no-open
+# 4. Only if you want to optimize:
+python3 scripts/apply_recommendations.py --yes --enable-weekly-review
 
-# 4. Open the dashboard (hosts filter, relative savings, switch-downs, Pro stub)
+# 5. Dashboard: declare host/tier, read the active burn, then Yes on optimize
 #    ~/.auto-model-router/demo/dashboard.html  or  demo/dashboard.html
 ```
 
