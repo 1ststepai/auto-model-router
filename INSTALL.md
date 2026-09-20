@@ -151,7 +151,7 @@ To run truly weekly without thinking about it, use your OS scheduler — **nothi
 
 ## What this does not do
 
-This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier suggestion, auto-continues only when the work is clearly light and reversible, and otherwise waits for confirmation or an override before using the host's model picker or effort setting. A host's native Auto mode can still make its own choice unless you change that host setting.
+This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier **and** a concrete picker/effort action from the project's local map, auto-continues only when the work is clearly light and reversible, and otherwise waits for confirmation or an override. If the current Cursor pick is heavier or lighter than that mapped control, the agent should ask you to switch — it cannot flip the picker or read Cursor usage/quota meters. A host's native Auto mode can still make its own choice unless you change that host setting.
 
 If you are running out of usage or burning tokens, this targets **model overkill**: suggest a lighter tier when it is sufficient, auto-continue the obvious reversible cases, and confirm when the choice is risky, ambiguous, or near a tier boundary. It can help slow usage burn only when that authorized tier is mapped to a cheaper/faster model or lower effort and that option actually runs. Tools such as **lean.ctx** and **ponytail** are complementary peers—not competitors and not affiliated with this project—that reduce how much context you send; this skill does not shrink context or guarantee savings. Together they form a usage-discipline stack, not a promise of measured Cursor/Claude/Codex quota reduction.
 
@@ -176,11 +176,11 @@ cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .agents/skills/a
 For a user-wide install, follow the host-specific paths below. Then **start a new chat/session**. A clear rename should auto-continue; a high-risk or mixed task should wait:
 
 ```text
-Auto continues on fast — clear bounded rename.
+Auto continues on fast — clear bounded rename. Switch Cursor picker to <your-fast-model> / low effort if the current model is heavier than needed.
 ```
 
 ```text
-Auto suggests reasoning — security-sensitive review must not be under-provisioned. Confirm required (high-risk / hard to undo), or override: fast, standard, reasoning, or max.
+Auto suggests reasoning — security-sensitive review must not be under-provisioned. Switch Cursor picker to <your-reasoning-model> / high effort (current pick is lighter than needed). Confirm the switch, or override: fast, standard, reasoning, or max.
 ```
 
 If the host cannot pause when a wait is required, the suggestion must still appear and your next instruction acts as confirmation.
@@ -243,10 +243,12 @@ alwaysApply: true
 ---
 
 Before substantial work or an open model/effort choice, read and follow
-`.cursor/skills/auto-model-router/SKILL.md`. Show the required Auto line.
-Auto-continue only when the skill's gate allows it; otherwise wait for
-confirmation or an override, then use Cursor's model picker. Honor any
-explicit model, provider, effort, or tier choice.
+`.cursor/skills/auto-model-router/SKILL.md`. Show the required Auto line
+with the local mapped picker/effort action (see
+`.auto-model-router/cursor-tier-map.json`). Auto-continue only when the
+skill's gate allows it and no switch is required; otherwise ask the user
+to switch or confirm. Honor any explicit model, provider, effort, or
+tier choice. Do not invent vendor model names or claim live Cursor quota.
 ```
 
 The rule makes the behavior more discoverable; it does not take control of Cursor's native Auto picker. If you use only a user-wide skill, install an equivalent user-wide rule if your Cursor version supports user rules, or rely on the skill's description and invoke it in the chat.
@@ -254,8 +256,9 @@ The rule makes the behavior more discoverable; it does not take control of Curso
 ### Verify in Cursor
 
 1. Open a **new Agent chat** in the project (or restart Cursor after a user-wide install).
-2. Ask for a clear rename (should print `Auto continues on fast — ...` and start) and a security-sensitive or mixed-boundary task (should wait).
-3. For a wait, reply `confirm` or choose another tier. The agent should then use the mapped Cursor picker/effort setting.
+2. Copy [`integrations/cursor-tier-map.example.json`](integrations/cursor-tier-map.example.json) to `.auto-model-router/cursor-tier-map.json` and fill in your picker labels.
+3. Ask for a clear rename (should print `Auto continues on fast — ...` **and** name the mapped fast picker/effort). If the current pick is heavier, the agent should ask you to switch down.
+4. Ask a security-sensitive or mixed-boundary task (should wait and name the mapped stronger picker/effort). Reply `confirm` or switch. AMR will not show a live Cursor usage remaining figure.
 
 ## Claude Code
 
@@ -410,7 +413,7 @@ Check that you installed the optional Cursor rule or added the relevant `AGENTS.
 
 ### Cursor's Auto still chooses silently
 
-That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker or force a provider/model change. Verify that the agent itself printed the Auto line; it should wait when the gate requires confirm, and may auto-continue a clear rename. Then choose the mapped model/effort in Cursor if needed.
+That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker, flip the picker for you, or read Cursor usage/quota/billing APIs. Verify that the agent printed the Auto line **and** a concrete mapped picker/effort action; it should ask you to switch when the current pick is heavier or lighter than needed, wait when the gate requires confirm, and may auto-continue a clear rename that is already on the mapped pick.
 
 ### Cloud cannot find it
 

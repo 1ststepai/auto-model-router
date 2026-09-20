@@ -21,8 +21,8 @@ These examples show the expected tier **and confirm gate** from the provider-agn
 
 ```text
 User: Rename the customer_id field to account_id in one config file.
-Agent: Auto continues on fast — clear bounded rename.
-Agent: [maps fast to the host's configured model/effort and starts]
+Agent: Auto continues on fast — clear bounded rename. Switch Cursor picker to
+       <your-fast-model> / low effort if the current model is heavier than needed.
 ```
 
 ### Auth / secrets → hard-gate
@@ -30,7 +30,8 @@ Agent: [maps fast to the host's configured model/effort and starts]
 ```text
 User: Review this auth change for XSS, credential leaks, and unsafe redirects.
 Agent: Auto suggests reasoning — security-sensitive review must not be under-provisioned.
-       Confirm required (high-risk / hard to undo), or override: fast, standard, reasoning, or max.
+       Switch Cursor picker to <your-reasoning-model> / high effort (current pick is
+       lighter than needed). Confirm the switch, or override: fast, standard, reasoning, or max.
 ```
 
 ### Near-boundary → confirm
@@ -42,5 +43,7 @@ Agent: Auto suggests standard — mixed rename + multi-file signals sit near a t
 User: confirm
 Agent: [maps standard and starts]
 ```
+
+On Cursor, fill in [`integrations/cursor-tier-map.example.json`](integrations/cursor-tier-map.example.json) so those lines name **your** picker labels. The portable skill keeps placeholders; it does not hard-code vendor model names and it cannot read Cursor usage meters.
 
 For mixed wording such as “draft a prototype redesign we can throw away,” reversible cues can bias toward a lighter **tier**. If those cues still mix adjacent families, the **gate** stays confirm. Security, irreversible actions, and a failed light attempt should still hard-gate or stop for confirm. These are expectations for a readable heuristic, not guarantees or a benchmark. Any usage benefit depends on the authorized tier mapping and the option that actually runs.

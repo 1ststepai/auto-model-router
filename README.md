@@ -133,27 +133,27 @@ Start a **new** chat/session and try both a clear rename and a high-risk or mixe
 
 ```text
 You: Rename foo to bar in utils.py
-Agent: Auto continues on fast — clear bounded rename.
-Agent: [runs with your configured fast model/effort]
+Agent: Auto continues on fast — clear bounded rename. Switch Cursor picker to
+       <your-fast-model> / low effort if the current model is heavier than needed.
 ```
 
 ```text
 You: Review this auth change for XSS and credential leaks
 Agent: Auto suggests reasoning — security-sensitive review must not be under-provisioned.
-       Confirm required (high-risk / hard to undo), or override: fast, standard, reasoning, or max.
+       Switch Cursor picker to <your-reasoning-model> / high effort (current pick is
+       lighter than needed). Confirm the switch, or override: fast, standard, reasoning, or max.
 You: confirm
-Agent: [runs with your configured reasoning model/effort]
 ```
 
-A near-boundary mix such as “rename the helper and apply the same pattern across a few files” should **wait** even when the work looks reversible. Then verify the agent uses the mapped model/effort. Cursor's built-in Auto picker remains a separate feature.
+A near-boundary mix such as “rename the helper and apply the same pattern across a few files” should **wait** even when the work looks reversible. On Cursor, fill in [`integrations/cursor-tier-map.example.json`](integrations/cursor-tier-map.example.json) so the agent names a **concrete picker action**, not only a tier. AMR cannot read Cursor usage meters or replace native Auto.
 
 ## Silent Auto vs this skill
 
 | | Silent Auto / native picker | Auto Model Router |
 | --- | --- | --- |
 | Decision | Host chooses internally | Agent explains a capability tier first |
-| User control | Depends on the host UI | Auto-continue only when clearly safe; confirm or override at boundaries and high-risk work |
-| Model names | Host-specific | Neutral tiers mapped locally to available models/effort |
+| User control | Depends on the host UI | Auto-continue only when clearly safe; ask to switch when the current pick is too heavy or too light |
+| Model names | Host-specific | Neutral tiers mapped locally; Cursor adapter names that picker action |
 | Cloud use | Host-dependent | Commit the skill and rule/instructions in the project |
 | Scope | Native picker behavior | Portable agent instructions; does not replace native Auto |
 
@@ -165,8 +165,8 @@ Tools such as **lean.ctx** and **ponytail** address a complementary waste: they 
 
 1. Read the task context: scope, ambiguity, risk, reversibility, and judgment required.
 2. Classify it into the lightest sufficient tier: `fast`, `standard`, `reasoning`, or `max`.
-3. Suggest the tier and give a short reason.
-4. Auto-continue when the work is clearly light and reversible; otherwise wait for confirm or override.
+3. Suggest the tier, a short reason, and the host's mapped picker/effort action when a local map exists.
+4. Auto-continue when the work is clearly light and reversible; ask to switch if the current model is heavier or lighter than needed; otherwise wait for confirm or override.
 5. Run with the chosen provider/model/effort mapping.
 6. Escalate after a clearly insufficient or failed light attempt, stop for confirm, and say so once.
 
@@ -196,7 +196,7 @@ python3 demo/classify.py --suggest "Debug intermittent auth failures"
 echo "Debug intermittent auth failures" | python3 demo/classify.py
 ```
 
-`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `reason`, `signals`, `confidence`, plus heuristic gate fields: `reversible`, `high_risk`, `near_boundary`, `gate`, and `gate_reason`.
+`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `reason`, `signals`, `confidence`, plus heuristic gate fields: `reversible`, `high_risk`, `near_boundary`, `gate`, and `gate_reason`. Pass `--map integrations/cursor-tier-map.example.json` (and optional `--current-tier`) to append a concrete Cursor picker action from a **local** placeholder map — not a vendor model list.
 
 ## Honest scope
 
@@ -224,7 +224,8 @@ skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
 scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
 scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
-integrations/CURSOR.md
+integrations/CURSOR.md                 # Cursor picker mapping + usage-meter honesty
+integrations/cursor-tier-map.example.json
 integrations/CLAUDE.md
 integrations/CODEX.md
 demo/classify.py                       # offline heuristic checker (tier + confirm gate)

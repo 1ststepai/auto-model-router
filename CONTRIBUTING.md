@@ -27,7 +27,7 @@ Add concise host-specific guidance under `integrations/` and link it from [`INST
 - how the host handles confirmation and a fresh-session reload;
 - what cloud/background agents receive from the repository checkout.
 
-Do not hard-code model names into the portable skill, and do not claim that an adapter controls a host's native Auto picker when it does not.
+Do not hard-code model names into the portable skill. Host mappings belong in `integrations/` (for Cursor, [`cursor-tier-map.example.json`](integrations/cursor-tier-map.example.json)). Do not claim that an adapter controls a host's native Auto picker, reads usage/quota APIs, or silently switches models.
 
 ## Run checks locally
 
@@ -36,6 +36,7 @@ This repository intentionally has no third-party runtime dependencies:
 ```bash
 python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
+python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json --current-tier max "Rename foo to bar"
 python3 -m compileall -q demo scripts
 python3 demo/savings_estimator.py demo/sample_usage_log.json
 python3 scripts/validate-plugins.py

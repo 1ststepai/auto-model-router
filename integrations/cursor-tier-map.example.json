@@ -1,0 +1,19 @@
+{
+  "comment": "Local Cursor adapter example — replace placeholders with labels from YOUR picker. Do not commit vendor marketing names into the portable skill. AMR does not read Cursor usage/quota APIs.",
+  "fast": {
+    "picker": "<your-fast-model>",
+    "effort": "low"
+  },
+  "standard": {
+    "picker": "<your-standard-model>",
+    "effort": "medium"
+  },
+  "reasoning": {
+    "picker": "<your-reasoning-model>",
+    "effort": "high"
+  },
+  "max": {
+    "picker": "<your-max-model>",
+    "effort": "max"
+  }
+}

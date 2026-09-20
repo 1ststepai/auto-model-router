@@ -32,6 +32,8 @@ Usage
   echo "rename foo to bar" | python3 classify.py
   python3 classify.py "debug why auth fails intermittently"
   python3 classify.py --suggest "debug why auth fails intermittently"
+  python3 classify.py --suggest --map integrations/cursor-tier-map.example.json \\
+      --current-tier max "rename foo to bar"
   python3 classify.py --examples
 """
 
@@ -40,7 +42,8 @@ from __future__ import annotations
 import json
 import re
 import sys
-from typing import List, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Signal patterns (prototype heuristics — intentionally simple & readable)
@@ -230,6 +233,46 @@ def decide_gate(
     ):
         return "auto_continue", "clear standard fit; reversible local work"
     return "confirm", "not a clear auto-continue case"
+
+
+def load_tier_map(path: str) -> Dict[str, dict]:
+    """Load a local host mapping. Values are picker/effort placeholders, not vendor truth."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: mapping must be a JSON object")
+    mapping: Dict[str, dict] = {}
+    for tier in TIER_ORDER:
+        entry = raw.get(tier)
+        if isinstance(entry, dict):
+            mapping[tier] = entry
+        elif isinstance(entry, str) and entry.strip():
+            mapping[tier] = {"picker": entry.strip()}
+    return mapping
+
+
+def picker_action(
+    tier: str,
+    mapping: Optional[Dict[str, dict]] = None,
+    current_tier: Optional[str] = None,
+    host: str = "Cursor",
+) -> str:
+    """Concrete picker/effort sentence from a local map. Never invents a vendor name."""
+    entry = (mapping or {}).get(tier) or {}
+    picker = str(entry.get("picker") or "").strip() or f"your mapped {tier} model"
+    effort = str(entry.get("effort") or "").strip()
+    target = f"{picker} / {effort} effort" if effort else picker
+
+    if current_tier in TIER_ORDER and tier in TIER_ORDER:
+        cur_i = TIER_ORDER.index(current_tier)
+        tgt_i = TIER_ORDER.index(tier)
+        if cur_i > tgt_i:
+            return f"Switch {host} picker to {target} (current pick looks heavier than needed)."
+        if cur_i < tgt_i:
+            return f"Switch {host} picker to {target} (current pick looks lighter than needed)."
+        return f"{host} picker already matches mapped {target}."
+    return (
+        f"Switch {host} picker to {target} if the current model is heavier or lighter than needed."
+    )
 
 
 def classify(task: str) -> dict:
@@ -450,7 +493,12 @@ EXAMPLES: List[Tuple[str, str, str]] = [
 ]
 
 
-def suggest_line(task: str, result=None) -> str:
+def suggest_line(
+    task: str,
+    result=None,
+    mapping: Optional[Dict[str, dict]] = None,
+    current_tier: Optional[str] = None,
+) -> str:
     """Human-facing Auto suggestion for the confirm/override UX."""
     result = result or classify(task)
     tier = result["tier"]
@@ -460,29 +508,43 @@ def suggest_line(task: str, result=None) -> str:
     if len(short_why) > 120:
         short_why = short_why[:117].rsplit(" ", 1)[0] + "…"
     gate = result.get("gate", "confirm")
+    action = picker_action(tier, mapping, current_tier) if mapping is not None else ""
     if gate == "auto_continue":
-        return f"Auto continues on **{tier}** — {short_why}."
-    if gate == "hard_gate":
-        return (
+        line = f"Auto continues on **{tier}** — {short_why}."
+    elif gate == "hard_gate":
+        line = (
             f"Auto suggests **{tier}** — {short_why}. "
             "Confirm required (high-risk / hard to undo), or override "
             "(fast | standard | reasoning | max)."
         )
-    return (
-        f"Auto suggests **{tier}** — {short_why}. "
-        "Confirm to run, or override (fast | standard | reasoning | max)."
-    )
+    else:
+        line = (
+            f"Auto suggests **{tier}** — {short_why}. "
+            "Confirm to run, or override (fast | standard | reasoning | max)."
+        )
+    if action:
+        line = f"{line} {action}"
+    return line
 
 
-def print_suggestion(task: str) -> dict:
+def print_suggestion(
+    task: str,
+    mapping: Optional[Dict[str, dict]] = None,
+    current_tier: Optional[str] = None,
+) -> dict:
     result = classify(task)
-    print(suggest_line(task, result))
+    if mapping is not None:
+        result = dict(result)
+        result["picker_action"] = picker_action(result["tier"], mapping, current_tier)
+        if current_tier:
+            result["current_tier"] = current_tier
+    print(suggest_line(task, result, mapping=mapping, current_tier=current_tier))
     print("--- JSON ---")
     print(json.dumps(result, indent=2))
     return result
 
 
-def print_examples() -> None:
+def print_examples() -> bool:
     print("Prototype rubric examples — provider-agnostic Auto:\n")
     print("UX: classify → suggest → boundary-gated confirm/override → run\n")
     passed = 0
@@ -510,6 +572,30 @@ def print_examples() -> None:
         print(f"   gate: {result.get('gate')} — {result.get('gate_reason')}")
         print(f"   suggest: {suggest_line(task, result)}")
         print()
+
+    demo_map = {
+        "fast": {"picker": "<your-fast-model>", "effort": "low"},
+        "standard": {"picker": "<your-standard-model>", "effort": "medium"},
+        "reasoning": {"picker": "<your-reasoning-model>", "effort": "high"},
+        "max": {"picker": "<your-max-model>", "effort": "max"},
+    }
+    heavier = picker_action("fast", demo_map, current_tier="max")
+    lighter = picker_action("reasoning", demo_map, current_tier="fast")
+    mapped_ok = (
+        "heavier than needed" in heavier
+        and "<your-fast-model>" in heavier
+        and "lighter than needed" in lighter
+    )
+    print("Picker-action helper (local map placeholders, not vendor names):")
+    print(f"   heavier current → {heavier}")
+    print(f"   lighter current → {lighter}")
+    if mapped_ok:
+        passed += 1
+        print("   ✓ placeholder map names a concrete switch without inventing a vendor model")
+    else:
+        failed += 1
+        print("   ✗ picker-action helper did not describe a heavier/lighter switch")
+    print()
     print(f"Summary: {passed}/{passed + failed} passed")
     print("--- JSON ---")
     out = [
@@ -520,41 +606,66 @@ def print_examples() -> None:
     return failed == 0
 
 
+def _take_option(args: List[str], names: Tuple[str, ...]) -> Optional[str]:
+    for i, token in enumerate(args):
+        if token in names:
+            if i + 1 >= len(args):
+                raise ValueError(f"{token} requires a value")
+            value = args[i + 1]
+            del args[i : i + 2]
+            return value
+    return None
+
+
 def main(argv: List[str]) -> int:
-    if len(argv) >= 2 and argv[1] in ("--examples", "-e"):
+    args = list(argv[1:])
+    if args and args[0] in ("--examples", "-e"):
         ok = print_examples()
         return 0 if ok else 1
 
-    if len(argv) >= 2 and argv[1] in ("-h", "--help"):
+    if args and args[0] in ("-h", "--help"):
         print(__doc__)
         return 0
 
-    if len(argv) >= 2 and argv[1] in ("--suggest", "-s"):
-        if len(argv) >= 3:
-            task = " ".join(argv[2:])
-        else:
-            if sys.stdin.isatty():
-                print(
-                    "Usage: classify.py --suggest <task>\n"
-                    "Or pipe a task on stdin with --suggest.",
-                    file=sys.stderr,
-                )
-                return 2
-            task = sys.stdin.read()
-        print_suggestion(task)
-        return 0
+    try:
+        map_path = _take_option(args, ("--map",))
+        current_tier = _take_option(args, ("--current-tier",))
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
 
-    if len(argv) >= 2:
-        task = " ".join(argv[1:])
+    mapping = load_tier_map(map_path) if map_path else None
+    if current_tier:
+        current_tier = current_tier.strip().lower()
+        current_tier = ALIAS_TO_TIER.get(current_tier, current_tier)
+        if current_tier not in TIER_ORDER:
+            print(
+                "error: --current-tier must be fast, standard, reasoning, or max",
+                file=sys.stderr,
+            )
+            return 2
+
+    suggest = False
+    if args and args[0] in ("--suggest", "-s"):
+        suggest = True
+        args = args[1:]
+
+    if args:
+        task = " ".join(args)
     else:
         if sys.stdin.isatty():
             print(
-                "Usage: classify.py <task> | classify.py --examples\n"
+                "Usage: classify.py [--map FILE] [--current-tier TIER] "
+                "[--suggest] <task>\n"
                 "Or pipe a task description on stdin.",
                 file=sys.stderr,
             )
             return 2
         task = sys.stdin.read()
+
+    if suggest or mapping is not None:
+        print_suggestion(task, mapping=mapping, current_tier=current_tier)
+        return 0
 
     print(json.dumps(classify(task), indent=2))
     return 0

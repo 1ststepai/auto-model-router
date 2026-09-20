@@ -20,8 +20,8 @@ Explicit user model, effort, or tier choices always win.
 
 ```text
 User: Rename the variable foo to bar in utils.py
-Agent: Auto continues on fast — clear bounded rename.
-Agent: [maps fast and starts]
+Agent: Auto continues on fast — clear bounded rename. Switch Cursor picker to
+       <your-fast-model> / low effort if the current model is heavier than needed.
 ```
 
 Reversible local edit, only fast-family signals, no boundary ambiguity.
@@ -31,7 +31,8 @@ Reversible local edit, only fast-family signals, no boundary ambiguity.
 ```text
 User: Review this auth change for XSS and credential leaks
 Agent: Auto suggests reasoning — security-sensitive review must not be under-provisioned.
-       Confirm required (high-risk / hard to undo), or override: fast, standard, reasoning, or max.
+       Switch Cursor picker to <your-reasoning-model> / high effort (current pick is
+       lighter than needed). Confirm the switch, or override: fast, standard, reasoning, or max.
 ```
 
 Same gate for purchases, customer sends, production deploys, and other irreversible external actions.
@@ -50,6 +51,8 @@ Adjacent-tier hits (`fast` + `standard`) are enough to wait, even when the work 
 
 ```bash
 python3 demo/classify.py --suggest "Rename the variable foo to bar in utils.py"
+python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json \
+  --current-tier max "Rename the variable foo to bar in utils.py"
 python3 demo/classify.py --suggest "Review this auth change for XSS and credential leaks"
 python3 demo/classify.py --suggest "Rename the helper and apply the same null-check pattern across a few files"
 python3 demo/classify.py --examples
@@ -60,5 +63,6 @@ JSON includes `tier`, `gate`, `near_boundary`, `high_risk`, `reversible`, `confi
 ## What this is not
 
 - Not a billing API, savings guarantee, or vendor affiliation
-- Not a production routing proxy
+- Not a production routing proxy and not a silent takeover of Cursor Auto
+- Not a live Cursor/Claude/Codex usage or quota meter
 - Not trained ML and not a security control

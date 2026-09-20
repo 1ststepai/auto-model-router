@@ -23,10 +23,11 @@ Use before dispatching substantial coding-agent work or choosing a model/effort 
 1. **Read context.** Assess scope, involved files or systems, ambiguity, required judgment, security or external-action risk, and whether the work is reversible.
 2. **Honor an explicit override.** If the user already chose a model, provider, effort, or tier, use that choice and skip an unsolicited suggestion.
 3. **Classify** the open choice into the lightest sufficient tier using the rubric below. Decide the confirm **gate** (`auto_continue`, `confirm`, or `hard_gate`) using the policy in the next section. An optional offline helper is `demo/classify.py` or `demo/classify.py --suggest`; it is only a heuristic second opinion and may emit `near_boundary`, `high_risk`, `reversible`, and `gate`.
-4. **Suggest in one line** before dispatch (always; including auto-continue). Use the shapes below.
+4. **Suggest in one line** before dispatch (always; including auto-continue). Use the shapes below. When the host adapter has a **local** tier→control mapping, include that concrete picker/effort action in the same line. Do not invent vendor model names.
 5. **Apply the confirm gate.** Auto-continue only when the policy allows it. Otherwise wait for confirmation (`confirm`, `yes`, or equivalent) or a tier/model override. Do not silently change the user's selected model. If the host cannot pause when a wait is required, return the suggestion and let the user's next instruction authorize the run.
-6. **Map the tier through the host adapter** described below, then run after auto-continue, confirmation, or an explicit override.
-7. **Escalate when needed.** If a light attempt fails or clearly needs more judgment, **stop for confirm** once, say you are escalating, and continue toward `reasoning` or `max` as appropriate.
+6. **Ask for a switch when the current control is a mismatch.** If the current model/effort is heavier than the mapped tier, ask the user to switch down. If it is lighter than needed for the complexity, ask them to switch up. A required switch is an explicit ask — not a silent picker takeover.
+7. **Map the tier through the host adapter** described below, then run after auto-continue, confirmation, an explicit override, or a confirmed switch.
+8. **Escalate when needed.** If a light attempt fails or clearly needs more judgment, **stop for confirm** once, say you are escalating, ask for the mapped stronger control, and continue toward `reasoning` or `max` as appropriate.
 
 ## Confirm gate (boundary-gated, not always-confirm)
 
@@ -93,26 +94,32 @@ See [`docs/boundary-gated-confirms.md`](https://github.com/1ststepai/auto-model-
 Adapters translate the neutral tier into the controls exposed by each host. They must preserve suggest → gate → run. They do not silently dispatch high-risk or ambiguous work. Auto-continue is allowed only when the gate says so, and it still shows the one-line suggestion.
 
 - **Grok Bot:** map `fast` to low effort; map `standard`, `reasoning`, and `max` to high effort when only low/high controls exist. Keep the four-tier suggestion visible even when the host collapses tiers.
-- **Cursor:** use the Cursor model picker (and any available effort control) to select the configured model mapped to the gated tier. Auto-continue only when the gate allows it; otherwise ask for confirmation in the conversation before invoking the picker or running the edit.
+- **Cursor:** resolve the gated tier through the project's local map (`.auto-model-router/cursor-tier-map.json` or `~/.auto-model-router/cursor-tier-map.json`; see the Cursor integration). Name that **concrete picker label and effort** in the suggestion line. Ask the user to switch (or confirm the switch) when the current pick is heavier or lighter than needed. Auto-continue only when the gate allows it and no switch is required. AMR does not replace Cursor's native Auto picker and cannot read Cursor usage/quota/billing meters — local `usage.jsonl` only. Do not hard-code vendor model names here.
 - **Claude:** select the configured Claude model or effort setting mapped to the gated tier. A project may map tiers to its available Claude models; the skill does not require or assume specific model names.
 - **Codex:** select the configured Codex model and/or reasoning effort mapped to the gated tier. Put this policy in `AGENTS.md`, project instructions, or a supported skills folder; do not assume a specific Codex model name.
 - **Other agents:** use the host's model, effort, or routing API and document the local mapping. If no control exists, still show the suggestion; wait when the gate requires confirm; do not claim the host switched models.
 
 ## Suggestion line shapes
 
-Auto-continue (no wait):
+Auto-continue (no wait, already on the mapped control or no switch required):
 
 ```text
 Auto continues on <tier> — <short reason>.
 ```
 
-Confirm or hard-gate (wait):
+When a local host mapping exists, append the concrete action. Use the mapped label from local config, never a guessed vendor name:
 
 ```text
-Auto suggests <tier> — <short reason>. Confirm to run, or override: fast, standard, reasoning, or max.
+Auto continues on fast — clear bounded rename. Switch Cursor picker to <mapped-fast> / low effort if the current model is heavier than needed.
 ```
 
-Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Confirm to run`.
+Confirm or hard-gate (wait), with a mapped switch when the current pick is a mismatch:
+
+```text
+Auto suggests <tier> — <short reason>. Switch to <mapped-control> (current pick is lighter/heavier than needed). Confirm the switch, or override: fast, standard, reasoning, or max.
+```
+
+If no local mapping is configured, say `your mapped <tier> model/effort` instead of inventing a name. Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Confirm to run`.
 
 ## Anti-patterns
 
@@ -123,6 +130,8 @@ Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Conf
 - Do not send every clear rename or procedure to `reasoning`/`max` merely to be safe.
 - Do not stay at `fast` after a failed attempt that needs judgment — escalate and stop for confirm.
 - Do not ignore an explicit model, provider, effort, or tier choice.
+- Do not emit only an abstract tier on Cursor (or similar) when a local mapping exists — name the mapped picker/effort action.
+- Do not invent vendor model names, silently take over a native Auto picker, or claim you read live usage/quota meters.
 - Do not present heuristic output as a production-quality classifier or as an official vendor recommendation.
 
 ## Optional local usage log
@@ -162,6 +171,8 @@ If `weeklyReview` is `true` in `~/.auto-model-router/config.json`, or the user a
 
 ## Honesty
 
-This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest → boundary-gated confirm/override → run the lightest sufficient option → escalate on failure**.
+This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest (tier + mapped host control) → boundary-gated confirm/override → run the lightest sufficient option → escalate on failure**.
+
+AMR does not read Cursor, Claude Code, or Codex usage/quota/billing APIs. Optional local `usage.jsonl` plus the dashboard are estimates only. On Cursor, the skill can ask the user to switch the picker; it cannot flip the picker or replace native Auto.
 
 For human installation instructions, see [`INSTALL.md`](https://github.com/1ststepai/auto-model-router/blob/main/INSTALL.md).

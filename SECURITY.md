@@ -6,6 +6,8 @@ Auto Model Router is a portable instruction skill and a small local heuristic de
 
 The heuristic intentionally routes authentication, secrets, irreversible actions, and other security-sensitive work toward stronger reasoning and a hard confirm gate, but users and host safeguards remain responsible for review and authorization. The confirm gate is a workflow aid, not an enforcement layer.
 
+AMR cannot read Cursor (or other host) usage, quota, or billing meters. Optional local `usage.jsonl` and the savings dashboard are estimates from that log only. On Cursor, the skill may ask the user to switch the model picker; it does not flip the picker or replace native Auto.
+
 ## Secrets and sensitive data
 
 - The skill contains no credentials, API keys, tokens, or required network calls.
