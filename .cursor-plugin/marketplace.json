@@ -1,0 +1,16 @@
+{
+  "name": "auto-model-router",
+  "owner": {
+    "name": "1ststepai"
+  },
+  "metadata": {
+    "description": "GitHub marketplace for the Auto Model Router Cursor plugin. Import this repository — it is not an official Cursor Marketplace listing."
+  },
+  "plugins": [
+    {
+      "name": "auto-model-router",
+      "source": ".",
+      "description": "A transparent, user-confirmed policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max)."
+    }
+  ]
+}

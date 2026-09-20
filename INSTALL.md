@@ -1,6 +1,79 @@
 # Install the Auto Model Router
 
-This repository is an agent behavior skill. Install the skill and, when you want it to run on every request, add the optional host rule or instruction file described below.
+This repository is an agent behavior skill. Install it as a **plugin** from this GitHub repo (preferred when your host supports marketplace install) or copy the skill with the apply script. When you want the policy on every request, add the optional host rule or instruction file described below.
+
+Plugin or skill install loads the suggest → confirm policy. It does **not** change Cursor, Claude Code, or Codex billing APIs, and it does **not** guarantee savings.
+
+## Install as a plugin
+
+This repo is its own plugin package. The canonical skill stays at [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). Host manifests point at that path — there is no second skill body.
+
+These steps install from **this GitHub repository** (or a local clone). They are not an official listing on Cursor’s public Marketplace or Anthropic’s official plugin catalogs.
+
+A plugin install does **not** open the savings dashboard. Use the [apply script](#recommended-apply-script-dashboard-auto-starts) (or open `demo/dashboard.html`) when you want the local estimator UI.
+
+### Cursor
+
+**Teams / Enterprise (preferred):** import this GitHub repo as a team marketplace, then install the plugin from Customize.
+
+1. Open **Dashboard → Plugins & MCPs → Add Marketplace → Import from Repo**.
+2. Paste `https://github.com/1ststepai/auto-model-router`.
+3. Review and add the `auto-model-router` plugin, then save marketplace access.
+4. In Cursor, open **Customize → Plugins** and install **Auto Model Router** (user or project scope).
+
+The repo includes `.cursor-plugin/plugin.json` (Cursor plugin) plus a root `plugin.json` (Agent Plugins). `.cursor-plugin/marketplace.json` is what Teams import.
+
+**If your Cursor build can add a plugin or skill from GitHub** (Customize → Plugins, or Skills from GitHub), use `1ststepai/auto-model-router`. That path depends on your Cursor version; it is not the public Marketplace catalog.
+
+**Local plugin fallback:** copy this clone into `~/.cursor/plugins/local/auto-model-router` (a real directory — Cursor skips a symlink that points outside that folder), then reload the window and check Customize.
+
+**Skill-only fallback:**
+
+```bash
+./scripts/apply.sh --no-open
+# or:
+mkdir -p ~/.cursor/skills/auto-model-router
+cp skills/auto-model-router/SKILL.md ~/.cursor/skills/auto-model-router/SKILL.md
+```
+
+### Claude Code
+
+In a Claude Code session:
+
+```text
+/plugin marketplace add 1ststepai/auto-model-router
+/plugin install auto-model-router@auto-model-router
+/reload-plugins
+```
+
+Equivalent CLI:
+
+```bash
+claude plugin marketplace add 1ststepai/auto-model-router
+claude plugin install auto-model-router@auto-model-router
+```
+
+The marketplace name in those commands is the `name` in `.claude-plugin/marketplace.json` (`auto-model-router`), not the GitHub owner. From a local clone you can use `/plugin marketplace add .` instead of the GitHub shorthand.
+
+**Skill-only fallback:** `./scripts/apply.sh --no-open`, or copy `skills/auto-model-router/SKILL.md` into `.claude/skills/auto-model-router/` (project) or `~/.claude/skills/auto-model-router/` (user).
+
+### Codex
+
+```bash
+codex plugin marketplace add 1ststepai/auto-model-router
+codex plugin add auto-model-router@auto-model-router
+```
+
+That registers `.agents/plugins/marketplace.json` from this repo, then installs the plugin. The package is a portable Agent Plugins root `plugin.json` (skills discovered under `skills/`) with a `.codex-plugin/plugin.json` compatibility overlay that sets `"skills": "./skills/"`.
+
+If you already have a clone, you can add it as a local marketplace:
+
+```bash
+codex plugin marketplace add /path/to/auto-model-router
+codex plugin add auto-model-router@auto-model-router
+```
+
+**Skill-only fallback:** `./scripts/apply.sh --no-open`, or copy the skill into `.agents/skills/auto-model-router/` and/or add a marked section to `AGENTS.md`.
 
 ## Recommended: apply script (dashboard auto-starts)
 

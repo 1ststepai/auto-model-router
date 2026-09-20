@@ -1,3 +1,8 @@
+---
+name: auto-model-router
+description: "Before choosing a model or effort for substantial work, read the task context, classify it into the lightest sufficient tier (`fast`, `standard`, `reasoning`, or `max`), suggest that tier and why, wait for user confirmation or an override, then run it through the host's adapter. Prefer lighter for reversible work, never under-provision security or irreversible actions, and escalate after a failed light attempt."
+---
+
 # Auto model router
 
 **name:** auto-model-router  

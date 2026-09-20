@@ -4,6 +4,8 @@ For the complete cross-host guide, see [`../INSTALL.md`](../INSTALL.md).
 
 ## Install
 
+**Plugin:** `/plugin marketplace add 1ststepai/auto-model-router` then `/plugin install auto-model-router@auto-model-router` and `/reload-plugins`. See [`../INSTALL.md`](../INSTALL.md).
+
 For a project-local Claude Code setup:
 
 ```bash

@@ -12,11 +12,34 @@ The repository contains a portable skill, small offline heuristic demo, integrat
 
 ## Install
 
-**Start with the complete [installation guide](INSTALL.md).** It covers project and user-wide installs, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, generic agents, cloud/background agents, and verification.
+**Start with the complete [installation guide](INSTALL.md).** It covers plugin installs, project and user-wide skill copies, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, generic agents, cloud/background agents, and verification.
 
-The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery.
+The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery. Plugin manifests for Cursor, Claude Code, and Codex all point at that skill — they do not ship a second policy.
 
-### Apply (recommended — dashboard auto-starts)
+Installing the plugin loads the suggest → confirm skill. It does **not** change vendor billing APIs or guarantee savings.
+
+### Install as a plugin
+
+Use each host’s native marketplace commands against this GitHub repo. These are not official Cursor Marketplace or Anthropic catalog listings.
+
+```text
+# Claude Code (in a session)
+/plugin marketplace add 1ststepai/auto-model-router
+/plugin install auto-model-router@auto-model-router
+/reload-plugins
+```
+
+```bash
+# Codex
+codex plugin marketplace add 1ststepai/auto-model-router
+codex plugin add auto-model-router@auto-model-router
+```
+
+**Cursor (Teams / Enterprise):** Dashboard → Plugins & MCPs → Import from Repo → `https://github.com/1ststepai/auto-model-router`, then Customize → Plugins → install Auto Model Router. Individuals can copy the clone into `~/.cursor/plugins/local/auto-model-router` or use the apply script / skill copy below.
+
+Plugin install does not open the savings dashboard. Use the apply script for that.
+
+### Apply (skill copy + dashboard auto-starts)
 
 ```bash
 # macOS/Linux — default: open dashboard
@@ -174,9 +197,17 @@ README.md
 INSTALL.md
 LICENSE
 .gitignore
+plugin.json                           # Agent Plugins 1.0 portable manifest
+.cursor-plugin/plugin.json            # Cursor plugin
+.cursor-plugin/marketplace.json       # Cursor team marketplace import
+.claude-plugin/plugin.json            # Claude Code plugin
+.claude-plugin/marketplace.json       # Claude Code marketplace
+.codex-plugin/plugin.json             # Codex compatibility overlay
+.agents/plugins/marketplace.json      # Codex repo marketplace
 SKILL.md                              # compatibility copy of the canonical skill
-skills/auto-model-router/SKILL.md     # canonical skill
+skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
 scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
+scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
 integrations/CURSOR.md
 integrations/CLAUDE.md
