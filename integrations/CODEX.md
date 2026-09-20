@@ -32,3 +32,5 @@ Tier labels are deliberately not Codex product names. Keep the mapping in projec
 ## Verify
 
 Start a new Codex run/session after changing `AGENTS.md` or adding a skill. Ask for a moderate task without selecting a model or reasoning effort. Before editing, Codex should show the `Auto suggests <tier> — <reason>...` line and wait for `confirm` or an explicit override. Put the files in the repository for cloud/background runs.
+
+A recorded real session (suggestion line only; no edits) and a copy-paste prompt are in the [README live demo](../README.md#live-demo). That pass is one successful run, not a guarantee that Codex remapped its model picker.
