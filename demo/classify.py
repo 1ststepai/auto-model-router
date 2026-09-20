@@ -233,7 +233,7 @@ def decide_gate(
 
 
 def classify(task: str) -> dict:
-    """Return tier / reason / signals / confidence for a task description."""
+    """Return tier, reason, signals, confidence, and heuristic confirm-gate fields."""
     task = (task or "").strip()
     if not task:
         return {
@@ -384,8 +384,8 @@ def classify(task: str) -> dict:
         s.startswith("mixed") or s.startswith("reversible —") or "mixed +" in s
         for s in signals
     )
-    # Honest heuristic: two+ families, or a mixed-signal decision, means adjacent-tier ambiguity.
-    near_boundary = bool(len(families) >= 2 or mixed_decision)
+    # Honest heuristic: adjacent-tier hits or a mixed-signal decision, not a learned score.
+    near_boundary = bool(_adjacent_families(families) or mixed_decision)
     if near_boundary and "near-boundary / ambiguous families" not in signals:
         signals.append("near-boundary / ambiguous families")
 
