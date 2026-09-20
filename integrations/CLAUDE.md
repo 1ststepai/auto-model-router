@@ -1,5 +1,7 @@
 # Claude integration
 
+For the complete cross-host guide, see [`../INSTALL.md`](../INSTALL.md).
+
 ## Install
 
 For a project-local Claude Code setup:
@@ -9,7 +11,14 @@ mkdir -p .claude/skills/auto-model-router
 cp skills/auto-model-router/SKILL.md .claude/skills/auto-model-router/SKILL.md
 ```
 
-You can instead paste the skill into `CLAUDE.md` or include it from project instructions using the instruction mechanism supported by your Claude setup. A user-level copy can be installed in the user skills/instructions location supported by Claude Code.
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .claude\skills\auto-model-router | Out-Null
+Copy-Item skills\auto-model-router\SKILL.md .claude\skills\auto-model-router\SKILL.md
+```
+
+For a user-wide copy, use `~/.claude/skills/auto-model-router/SKILL.md` on macOS/Linux/WSL or `%USERPROFILE%\.claude\skills\auto-model-router\SKILL.md` on native Windows. You can also include `@.claude/skills/auto-model-router/SKILL.md` from a project `CLAUDE.md`.
 
 ## Wire suggest → confirm
 
@@ -20,3 +29,7 @@ You can instead paste the skill into `CLAUDE.md` or include it from project inst
 5. After a failed light attempt, state that you are escalating and continue with a stronger configured model/effort.
 
 Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project.
+
+## Verify
+
+Start a new Claude Code session after installing. Ask for a moderate task without choosing a model or effort, and check for the `Auto suggests <tier> — <reason>...` line before file changes. Reply `confirm` or override explicitly. Project files are the dependable choice for cloud sessions; a local `~/.claude` copy does not automatically follow a remote checkout.

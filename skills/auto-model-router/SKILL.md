@@ -66,6 +66,20 @@ Auto suggests <tier> — <short reason>. Confirm to run, or override: fast, stan
 - Do not ignore an explicit model, provider, effort, or tier choice.
 - Do not present heuristic output as a production-quality classifier or as an official vendor recommendation.
 
+## Optional local usage log
+
+After a confirmed run, a host **may** append one JSON object per run to `.auto-model-router/usage.jsonl` when the project/user has enabled this local telemetry. This is the optional connection used by [`demo/savings_estimator.py`](https://github.com/1ststepai/auto-model-router/blob/main/demo/savings_estimator.py); it does not call or scrape Cursor, Claude Code, Codex, or any billing API.
+
+Minimum schema (one object per line):
+
+```json
+{"timestamp":"2026-09-20T13:00:00Z","tier":"standard","confirmed":true,"overridden":false}
+```
+
+Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields include `suggested_tier`, `host`, and a non-sensitive `task_kind`. Do not log prompts, task text, code, secrets, customer data, or provider credentials by default. The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
+
 ## Honesty
 
 This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest → confirm/override → run the lightest sufficient option → escalate on failure**.
+
+For human installation instructions, see [`INSTALL.md`](https://github.com/1ststepai/auto-model-router/blob/main/INSTALL.md).

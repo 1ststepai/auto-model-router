@@ -1,28 +1,34 @@
 # Auto model router — examples
 
-Expected tiers from the provider-agnostic prototype rubric (`demo/classify.py`). In every host, Auto should suggest the tier and reason, wait for confirmation or an override, then map it to the configured model or effort.
+These examples show the expected tier from the provider-agnostic prototype rubric in [`demo/classify.py`](demo/classify.py). In every host, Auto should suggest the tier and reason, wait for confirmation or an override, then map it to the configured model or effort.
 
-| # | Task | Tier | Why |
-|---|------|------|-----|
-| 1 | Rename the variable `foo` to `bar` in `utils.py` | **fast** | Clear single-file rename; no judgment. |
-| 2 | Summarize this 3-paragraph email in two bullets | **fast** | Short summarization of bounded text. |
-| 3 | What is the capital of France? | **fast** | Short factual question. |
-| 4 | Follow these steps to add a logging line to `main.py` | **fast** | Clear procedure given; execute as specified. |
-| 5 | Apply the same null-check pattern across a few files | **standard** | Multi-file but known pattern; mid tier. |
-| 6 | Wire up a CRUD endpoint using the existing handler pattern | **standard** | Known shape / existing pattern. |
-| 7 | Debug why auth fails intermittently in production | **reasoning** | Unknown root cause; investigative judgment. |
-| 8 | Design the architecture for a multi-tenant billing system | **reasoning** | Architecture / system design. |
-| 9 | Investigate ambiguous requirements and propose an API shape | **reasoning** | Ambiguity + design judgment. |
-| 10 | Review this auth change for XSS and credential leaks | **reasoning** | Security-sensitive review. |
-| 11 | Prove a novel consensus algorithm and redesign the entire distributed store | **max** | Hard formal reasoning + large redesign. |
-| 12 | Open-ended research: invent a new indexing approach for this corpus | **max** | Research-level / open-ended invention. |
+| # | Real-world task | Expected tier | Why |
+|---:|---|---|---|
+| 1 | Rename the `customer_id` field to `account_id` in one config file | **fast** | Clear, bounded, reversible single-file edit. |
+| 2 | Summarize the incident timeline in this issue into five bullets | **fast** | Short, bounded summarization. |
+| 3 | Follow these steps to add a logging line to `main.py` | **fast** | The procedure is already specified. |
+| 4 | Apply the same null-check pattern across a few files in the API client | **standard** | Multi-file change with a known pattern. |
+| 5 | Wire up a CRUD endpoint using the existing handler pattern | **standard** | Routine feature work with a clear local shape. |
+| 6 | Make a multi-file update to the SDK client and tests for the new pagination field | **standard** | Several coordinated edits following existing conventions. |
+| 7 | Debug why checkout authentication fails intermittently in production | **reasoning** | Unknown root cause and operational risk require investigation. |
+| 8 | Design the architecture for a multi-tenant billing system | **reasoning** | Architecture and tradeoff judgment are central. |
+| 9 | Review this auth change for XSS, credential leaks, and unsafe redirects | **reasoning** | Security-sensitive review must not be under-provisioned. |
+| 10 | Prove a novel consensus algorithm and redesign the distributed store | **max** | Formal reasoning plus a large, ambiguous redesign. |
 
 ## Suggest → confirm examples
 
-| Task | Suggestion line |
-|------|-----------------|
-| Rename `foo` → `bar` | Auto suggests **fast** — clear single-file rename. Confirm to run, or override: fast, standard, reasoning, or max. |
-| Intermittent auth debug | Auto suggests **reasoning** — unknown-root-cause auth debugging needs investigation. Confirm to run, or override: fast, standard, reasoning, or max. |
-| Invent new indexing | Auto suggests **max** — open-ended research / hardest judgment. Confirm to run, or override: fast, standard, reasoning, or max. |
+```text
+User: Apply the same null-check pattern across a few files in the API client.
+Agent: Auto suggests standard — multi-file known-pattern work. Confirm to run,
+       or override: fast, standard, reasoning, or max.
+User: confirm
+Agent: [maps standard to the host's configured model/effort and starts]
+```
 
-For mixed wording such as “draft a prototype redesign we can throw away,” reversible cues should bias toward the lighter tier. Security, irreversible actions, and a failed light attempt should still trigger escalation.
+```text
+User: Debug why checkout authentication fails intermittently in production.
+Agent: Auto suggests reasoning — unknown-root-cause auth debugging needs investigation.
+       Confirm to run, or override: fast, standard, reasoning, or max.
+```
+
+For mixed wording such as “draft a prototype redesign we can throw away,” reversible cues can bias toward a lighter tier. Security, irreversible actions, and a failed light attempt should still trigger escalation. These are expectations for a readable heuristic, not guarantees or a benchmark. Any usage benefit depends on the confirmed tier mapping and the option that actually runs.

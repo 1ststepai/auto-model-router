@@ -1,5 +1,7 @@
 # Cursor integration
 
+For the complete cross-host guide, see [`../INSTALL.md`](../INSTALL.md).
+
 ## Install
 
 From a project containing this repository:
@@ -9,7 +11,21 @@ mkdir -p .cursor/skills/auto-model-router
 cp skills/auto-model-router/SKILL.md .cursor/skills/auto-model-router/SKILL.md
 ```
 
-For a user-wide setup, copy the same file into the user skills directory supported by your Cursor installation. Another option is to link or reference the canonical file from a `.cursor/rules/` rule. Keep the rule short and point it at `skills/auto-model-router/SKILL.md` so the policy remains portable.
+On Windows PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force .cursor\skills\auto-model-router | Out-Null
+Copy-Item skills\auto-model-router\SKILL.md .cursor\skills\auto-model-router\SKILL.md
+```
+
+For a user-wide setup, use `~/.cursor/skills/auto-model-router/SKILL.md` on macOS/Linux or `%USERPROFILE%\.cursor\skills\auto-model-router\SKILL.md` on Windows. The PowerShell equivalent is:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.cursor\skills\auto-model-router" | Out-Null
+Copy-Item skills\auto-model-router\SKILL.md "$env:USERPROFILE\.cursor\skills\auto-model-router\SKILL.md"
+```
+
+An optional always-apply `.cursor/rules/auto-model-router.mdc` can point at the project skill. Keep the rule short; the full example is in [`../INSTALL.md`](../INSTALL.md).
 
 ## Wire suggest → confirm
 
@@ -20,3 +36,7 @@ For a user-wide setup, copy the same file into the user skills directory support
 5. If the attempt is clearly too light, explain the escalation once and select a stronger configured option.
 
 Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill.
+
+## Verify
+
+Start a new Agent chat (or restart Cursor after a user-wide install), ask for a moderate task without naming a model, and confirm that the `Auto suggests <tier> — <reason>...` line appears before edits. Reply `confirm` or override the tier. Cursor's native Auto picker is separate and may still choose silently.

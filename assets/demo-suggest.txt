@@ -1,0 +1,6 @@
+Auto Model Router demo — suggest → confirm
+
+User: Wire up a CRUD endpoint using the existing handler pattern.
+Agent: Auto suggests **standard** — Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient. Confirm to run, or override (fast | standard | reasoning | max).
+User: confirm
+Agent: Confirmed standard. Running with the host's configured standard model/effort.

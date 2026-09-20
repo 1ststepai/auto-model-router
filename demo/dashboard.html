@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Auto Model Router — Savings Estimator</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 980px; margin: 0 auto; padding: 2rem 1rem 4rem; line-height: 1.45; }
+    .banner { padding: 1rem 1.2rem; border: 2px solid #d97706; border-radius: .7rem; background: #fff7ed; color: #7c2d12; font-weight: 700; }
+    @media (prefers-color-scheme: dark) { .banner { background: #431407; color: #fed7aa; } }
+    textarea { width: 100%; min-height: 10rem; box-sizing: border-box; font: .9rem ui-monospace, monospace; margin: .5rem 0; }
+    button, input { font: inherit; margin: .25rem .35rem .25rem 0; }
+    button { cursor: pointer; padding: .45rem .8rem; border-radius: .4rem; border: 1px solid #888; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; margin: 1rem 0; }
+    .card { border: 1px solid #8886; border-radius: .6rem; padding: .8rem; }
+    .value { display: block; font-size: 1.55rem; font-weight: 750; }
+    .chart { display: grid; gap: .65rem; margin: 1rem 0 2rem; max-width: 700px; }
+    .row { display: grid; grid-template-columns: 95px 1fr 70px; align-items: center; gap: .6rem; }
+    .track { height: 1.1rem; background: #8884; border-radius: .4rem; overflow: hidden; }
+    .bar { height: 100%; border-radius: .4rem; }
+    .fast { background: #22c55e; } .standard { background: #3b82f6; }
+    .reasoning { background: #f59e0b; } .max { background: #ef4444; }
+    pre { overflow: auto; padding: 1rem; background: #8882; border-radius: .5rem; }
+    .muted { opacity: .78; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Auto Model Router savings estimator</h1>
+    <p class="banner">Estimates from your routing log, not live Cursor/Claude billing.</p>
+    <p>This uses example relative rates: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>. Percentages are estimates from the supplied local routing log, not measured vendor savings. It never accesses credentials, GUI state, tokens, or vendor billing APIs.</p>
+    <p class="muted">Use this alongside context tools such as <strong>lean.ctx</strong> or <strong>ponytail</strong>: those reduce context sent, while this router addresses model-tier overkill. It can help slow usage burn only when a confirmed lighter tier maps to a cheaper/faster model or lower effort and actually runs. No affiliation is implied, and no savings are guaranteed.</p>
+
+    <h2>Load a routing log</h2>
+    <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>.</p>
+    <button id="sample">Load sample log</button>
+    <input id="file" type="file" accept="application/json,.json">
+    <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>
+    <br><button id="calculate">Calculate estimates</button>
+    <span id="status" class="muted" role="status"></span>
+
+    <section id="results" hidden>
+      <h2>Estimate</h2>
+      <div class="cards">
+        <div class="card">Tasks<span id="tasks" class="value">—</span></div>
+        <div class="card">Vs always-reasoning<span id="reasoning-saved" class="value">—</span></div>
+        <div class="card">Vs always-max<span id="max-saved" class="value">—</span></div>
+        <div class="card">Override rate<span id="override" class="value">—</span></div>
+      </div>
+      <h3>Tasks by selected tier</h3>
+      <div id="chart" class="chart"></div>
+      <pre id="json"></pre>
+    </section>
+  </main>
+<script>
+const RATES = { fast: 1, standard: 3, reasoning: 8, max: 20 };
+const TIERS = ["fast", "standard", "reasoning", "max"];
+const SAMPLE = [
+  {
+    "timestamp": "2026-09-14T09:12:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  },
+  {
+    "timestamp": "2026-09-14T10:05:00-04:00",
+    "tier": "standard",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  },
+  {
+    "timestamp": "2026-09-14T13:41:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "claude-code"
+  },
+  {
+    "timestamp": "2026-09-15T09:26:00-04:00",
+    "tier": "reasoning",
+    "confirmed": true,
+    "overridden": false,
+    "host": "claude-code"
+  },
+  {
+    "timestamp": "2026-09-15T11:18:00-04:00",
+    "tier": "standard",
+    "confirmed": true,
+    "overridden": true,
+    "suggested_tier": "fast",
+    "host": "codex"
+  },
+  {
+    "timestamp": "2026-09-15T15:02:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "codex"
+  },
+  {
+    "timestamp": "2026-09-16T08:47:00-04:00",
+    "tier": "standard",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  },
+  {
+    "timestamp": "2026-09-16T14:33:00-04:00",
+    "tier": "max",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  },
+  {
+    "timestamp": "2026-09-17T10:11:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "claude-code"
+  },
+  {
+    "timestamp": "2026-09-17T16:24:00-04:00",
+    "tier": "reasoning",
+    "confirmed": true,
+    "overridden": true,
+    "suggested_tier": "standard",
+    "host": "claude-code"
+  },
+  {
+    "timestamp": "2026-09-18T09:03:00-04:00",
+    "tier": "standard",
+    "confirmed": true,
+    "overridden": false,
+    "host": "codex"
+  },
+  {
+    "timestamp": "2026-09-18T12:56:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "codex"
+  },
+  {
+    "timestamp": "2026-09-19T11:37:00-04:00",
+    "tier": "reasoning",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  },
+  {
+    "timestamp": "2026-09-20T08:22:00-04:00",
+    "tier": "fast",
+    "confirmed": true,
+    "overridden": false,
+    "host": "cursor"
+  }
+];
+const $ = (id) => document.getElementById(id);
+function entries(payload) {
+  if (Array.isArray(payload)) return payload;
+  for (const key of ["decisions", "usage", "log", "entries"]) if (Array.isArray(payload[key])) return payload[key];
+  throw new Error("JSON must be an array or contain decisions/usage/log/entries");
+}
+function calculate(payload) {
+  const rows = entries(payload);
+  if (!rows.length) throw new Error("The routing log is empty");
+  const counts = Object.fromEntries(TIERS.map(t => [t, 0]));
+  let units = 0, overrides = 0;
+  rows.forEach((row, i) => {
+    if (!row || !TIERS.includes(row.tier)) throw new Error(`Entry ${i + 1} has an invalid tier`);
+    counts[row.tier]++;
+    units += RATES[row.tier];
+    if (row.overridden === true) overrides++;
+  });
+  const alwaysReasoning = rows.length * RATES.reasoning;
+  const alwaysMax = rows.length * RATES.max;
+  const pct = base => Math.round((base - units) / base * 1000) / 10;
+  return {
+    rates_are: "illustrative relative example units, not vendor prices",
+    example_rates: RATES,
+    task_count: rows.length,
+    tasks_by_tier: counts,
+    override_count: overrides,
+    override_rate_pct: Math.round(overrides / rows.length * 1000) / 10,
+    routed_relative_units: units,
+    always_reasoning_relative_units: alwaysReasoning,
+    always_max_relative_units: alwaysMax,
+    estimated_savings_vs_always_reasoning_pct: pct(alwaysReasoning),
+    estimated_savings_vs_always_max_pct: pct(alwaysMax)
+  };
+}
+function render(payload) {
+  const result = calculate(payload);
+  $("results").hidden = false;
+  $("tasks").textContent = result.task_count;
+  $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct + "%";
+  $("max-saved").textContent = result.estimated_savings_vs_always_max_pct + "%";
+  $("override").textContent = result.override_rate_pct + "%";
+  const maxCount = Math.max(...Object.values(result.tasks_by_tier), 1);
+  $("chart").innerHTML = TIERS.map(t => `<div class="row"><strong>${t}</strong><div class="track"><div class="bar ${t}" style="width:${result.tasks_by_tier[t] / maxCount * 100}%"></div></div><span>${result.tasks_by_tier[t]}</span></div>`).join("");
+  $("json").textContent = JSON.stringify(result, null, 2);
+  $("status").textContent = " Loaded successfully.";
+}
+function loadText(text) {
+  try { render(JSON.parse(text)); }
+  catch (error) { $("status").textContent = " Error: " + error.message; $("results").hidden = true; }
+}
+$("sample").addEventListener("click", async () => {
+  try {
+    const response = await fetch("sample_usage_log.json");
+    if (!response.ok) throw new Error("sample file unavailable");
+    const text = await response.text();
+    $("input").value = text;
+    loadText(text);
+  } catch (_) {
+    $("input").value = JSON.stringify(SAMPLE, null, 2);
+    render(SAMPLE);
+    $("status").textContent = " Loaded embedded sample (file fetch was unavailable).";
+  }
+});
+$("calculate").addEventListener("click", () => loadText($("input").value));
+$("file").addEventListener("change", event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { $("input").value = reader.result; loadText(reader.result); };
+  reader.readAsText(file);
+});
+$("sample").click();
+</script>
+</body>
+</html>
