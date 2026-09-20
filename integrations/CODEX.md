@@ -4,6 +4,8 @@ For the complete cross-host guide, see [`../INSTALL.md`](../INSTALL.md).
 
 ## Install
 
+**Plugin:** `codex plugin marketplace add 1ststepai/auto-model-router` then `codex plugin add auto-model-router@auto-model-router`. See [`../INSTALL.md`](../INSTALL.md).
+
 Add the skill to project instructions, commonly `AGENTS.md`:
 
 ```bash

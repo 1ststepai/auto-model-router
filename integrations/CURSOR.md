@@ -4,6 +4,8 @@ For the complete cross-host guide, see [`../INSTALL.md`](../INSTALL.md).
 
 ## Install
 
+**Plugin (Teams / Enterprise):** Dashboard → Plugins & MCPs → Import from Repo → `https://github.com/1ststepai/auto-model-router`, then Customize → Plugins → install Auto Model Router. Local fallback: copy this clone into `~/.cursor/plugins/local/auto-model-router`, or run `./scripts/apply.sh`. See [`../INSTALL.md`](../INSTALL.md).
+
 From a project containing this repository:
 
 ```bash

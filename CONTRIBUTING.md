@@ -36,10 +36,13 @@ This repository intentionally has no third-party runtime dependencies:
 ```bash
 python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
-python3 -m compileall -q demo
+python3 -m compileall -q demo scripts
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 scripts/validate-plugins.py
 git diff --check
 ```
+
+Keep plugin manifests pointed at [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). Do not fork a second skill body under a host-specific plugin folder. If you change the skill, update the root [`SKILL.md`](SKILL.md) copy to match.
 
 The first command should report every example passed. Also manually check Markdown links and code fences when changing documentation.
 
