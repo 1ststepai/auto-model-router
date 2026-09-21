@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Estimate relative routing savings from tasks or a usage decision log.
+"""Summarize a local routing log.
 
-This is an illustrative estimator. It does not read Cursor, Claude Code, Codex,
-or any vendor billing/token API. Rates are example relative units only.
+Prefers input_tokens, output_tokens, and cost_usd when a row has them.
+Rows with only a tier fall back to illustrative relative units (fast=1, standard=3,
+reasoning=8, max=20), labeled as such. Dollar rates for token counts come only
+from a price table you fill (--prices). This script does not scrape vendor billing
+and does not ship real vendor prices.
 """
 
 from __future__ import annotations
@@ -10,17 +13,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+
+HERE = Path(__file__).resolve()
+for _base in HERE.parents:
+    if (_base / "auto_model_router.py").is_file():
+        sys.path.insert(0, str(_base))
+        break
 
 try:
     from classify import classify
-except ImportError:  # Running as demo.savings_estimator from the repo root.
+except ImportError:
     from demo.classify import classify
 
-TIERS = ("fast", "standard", "reasoning", "max")
-EXAMPLE_RATES = {"fast": 1.0, "standard": 3.0, "reasoning": 8.0, "max": 20.0}
+from auto_model_router import TIERS, load_price_table, summarize_usage  # noqa: E402
 
 
 def _as_bool(value: Any) -> bool:
@@ -59,6 +66,24 @@ def _entries(payload: Any, mode: str | None) -> tuple[str, List[Any]]:
     raise ValueError("Could not detect input: use strings for tasks or objects with tier for a log")
 
 
+def _usage_fields(item: dict) -> Dict[str, Any]:
+    extra: Dict[str, Any] = {}
+    for key in (
+        "input_tokens",
+        "output_tokens",
+        "cost_usd",
+        "currency",
+        "timestamp",
+        "suggested_tier",
+        "host",
+        "gate",
+        "confidence",
+    ):
+        if item.get(key) is not None:
+            extra[key] = item[key]
+    return extra
+
+
 def normalize(payload: Any, mode: str | None = None) -> tuple[str, List[Dict[str, Any]]]:
     kind, raw = _entries(payload, mode)
     if not isinstance(raw, list) or not raw:
@@ -78,6 +103,8 @@ def normalize(payload: Any, mode: str | None = None) -> tuple[str, List[Dict[str
                 "confirmed": True,
                 "overridden": False,
                 "source": "classified task",
+                "confidence": result.get("confidence"),
+                "gate": result.get("gate"),
             })
         else:
             if not isinstance(item, dict):
@@ -87,73 +114,91 @@ def normalize(payload: Any, mode: str | None = None) -> tuple[str, List[Dict[str
                 "tier": selected,
                 "confirmed": _as_bool(item.get("confirmed", False)),
                 "overridden": _as_bool(item.get("overridden", False)),
-                "timestamp": item.get("timestamp"),
-                **({"suggested_tier": item["suggested_tier"]} if item.get("suggested_tier") else {}),
+                **_usage_fields(item),
             })
     return kind, normalized
 
 
-def percent_saved(baseline: float, routed: float) -> float:
-    if baseline <= 0:
-        return 0.0
-    return round((baseline - routed) / baseline * 100, 1)
-
-
-def estimate(entries: Iterable[Dict[str, Any]], source: str) -> Dict[str, Any]:
-    entries = list(entries)
-    by_tier = Counter(item["tier"] for item in entries)
-    routed_units = sum(EXAMPLE_RATES[item["tier"]] for item in entries)
-    always_max = len(entries) * EXAMPLE_RATES["max"]
-    always_reasoning = len(entries) * EXAMPLE_RATES["reasoning"]
-    overrides = sum(1 for item in entries if item.get("overridden", False))
-    confirmed = sum(1 for item in entries if item.get("confirmed", False))
-    return {
-        "source": source,
-        "rates_are": "illustrative relative example units, not vendor prices",
-        "example_rates": EXAMPLE_RATES,
-        "task_count": len(entries),
-        "tasks_by_tier": {tier: by_tier.get(tier, 0) for tier in TIERS},
-        "confirmed_count": confirmed,
-        "override_count": overrides,
-        "override_rate_pct": round(overrides / len(entries) * 100, 1),
-        "routed_relative_units": round(routed_units, 2),
-        "always_reasoning_relative_units": round(always_reasoning, 2),
-        "always_max_relative_units": round(always_max, 2),
-        "estimated_savings_vs_always_reasoning_pct": percent_saved(always_reasoning, routed_units),
-        "estimated_savings_vs_always_max_pct": percent_saved(always_max, routed_units),
-    }
+def estimate(entries: List[Dict[str, Any]], source: str, price_table: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    summary = summarize_usage(entries, price_table)
+    summary["source"] = source
+    return summary
 
 
 def human_summary(result: Dict[str, Any]) -> str:
     counts = ", ".join(
         f"{tier}={result['tasks_by_tier'][tier]}" for tier in TIERS if result["tasks_by_tier"][tier]
     ) or "none"
-    return "\n".join([
+    lines = [
         "Savings estimator",
-        "Rates: EXAMPLE relative units only (not real vendor prices)",
+        f"Basis: {result['basis']}",
         f"Analyzed {result['task_count']} routed task(s): {counts}",
-        f"Routed usage: {result['routed_relative_units']:.1f} relative units",
-        f"Estimated savings vs always-reasoning: {result['estimated_savings_vs_always_reasoning_pct']:.1f}%",
-        f"Estimated savings vs always-max: {result['estimated_savings_vs_always_max_pct']:.1f}%",
-        f"Override rate: {result['override_rate_pct']:.1f}% ({result['override_count']}/{result['task_count']})",
-        "Percentages estimate this local log only; no savings are guaranteed.",
-        "No Cursor, Claude Code, Codex, token, or billing API was accessed.",
-    ])
+        f"Tokens logged: input={result['input_tokens']} output={result['output_tokens']}",
+    ]
+    if result.get("measured_cost_usd") is not None:
+        lines.append(
+            f"Measured cost: ${result['measured_cost_usd']:.6f} "
+            f"from {result['priced_entry_count']} row(s) with cost_usd or your price table"
+        )
+    else:
+        lines.append("Measured cost: none (no cost_usd and no complete local price table)")
+    illustrative = result.get("illustrative")
+    if illustrative:
+        lines.extend([
+            f"Illustrative fallback ({illustrative['entries']} row(s) with tier only): "
+            f"{illustrative['routed_relative_units']:.1f} relative units",
+            "Rates: EXAMPLE relative units only (not real vendor prices) "
+            f"fast={illustrative['example_rates']['fast']:g}x "
+            f"standard={illustrative['example_rates']['standard']:g}x "
+            f"reasoning={illustrative['example_rates']['reasoning']:g}x "
+            f"max={illustrative['example_rates']['max']:g}x",
+            f"Estimated savings vs always-reasoning (illustrative rows only): "
+            f"{illustrative['estimated_savings_vs_always_reasoning_pct']:.1f}%",
+            f"Estimated savings vs always-max (illustrative rows only): "
+            f"{illustrative['estimated_savings_vs_always_max_pct']:.1f}%",
+        ])
+    lines.append(
+        f"Override rate: {result['override_rate_pct']:.1f}% "
+        f"({result['override_count']}/{result['task_count']})"
+    )
+    lines.extend(result.get("notes") or [])
+    lines.append("No Cursor, Claude Code, Codex, or billing API was accessed.")
+    if result.get("price_table_status") == "missing_rates":
+        lines.append(
+            "Token rows stayed unpriced. Copy demo/prices.example.json, fill per-million rates, "
+            "and pass --prices. This repo does not invent those rates."
+        )
+    return "\n".join(lines)
+
+
+def load_input(path: Path) -> Any:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".jsonl":
+        rows = []
+        for line in text.splitlines():
+            if line.strip():
+                rows.append(json.loads(line))
+        return rows
+    return json.loads(text)
 
 
 def main(argv: List[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("input", nargs="?", default="demo/sample_usage_log.json", help="JSON tasks or routing log")
+    parser.add_argument("input", nargs="?", default="demo/sample_usage_log.json", help="JSON tasks, routing log, or usage.jsonl")
     parser.add_argument("--tasks", action="store_true", help="treat a JSON array/object as task descriptions")
     parser.add_argument("--log", action="store_true", help="treat a JSON array/object as routing decisions")
+    parser.add_argument("--prices", type=Path, default=None, help="local price table JSON you filled (optional)")
     args = parser.parse_args(argv[1:])
     if args.tasks and args.log:
         parser.error("choose at most one of --tasks and --log")
     mode = "tasks" if args.tasks else "log" if args.log else None
     try:
-        payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        payload = load_input(Path(args.input))
+        prices = load_price_table(args.prices) if args.prices else None
+        if args.prices and prices is None:
+            raise ValueError(f"price table not found: {args.prices}")
         kind, entries = normalize(payload, mode)
-        result = estimate(entries, kind)
+        result = estimate(entries, kind, prices)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

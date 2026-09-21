@@ -6,14 +6,14 @@ Thanks for helping make Auto Model Router clearer, safer, and more useful across
 
 1. Read [`README.md`](README.md), [`INSTALL.md`](INSTALL.md), and [`SKILL.md`](SKILL.md).
 2. Keep the project provider-agnostic: use `fast`, `standard`, `reasoning`, and `max`, not a vendor's current model names.
-3. Preserve the core UX: **context → classify → suggest → confirm/override → run → escalate**.
-4. Be explicit that the rubric is a transparent heuristic, not ML or a security control.
+3. Preserve the core UX: **context → classify → suggest → gate → run → escalate**. Do not revert to always-confirm on every call, and do not auto-continue spendy tiers.
+4. Be explicit that the rubric is a transparent heuristic, not ML or a security control. Never invent token counts, dollar amounts, or vendor billing.
 
 ## Improve the rubric
 
 - Add or refine readable patterns in `demo/classify.py`.
-- Add a representative input and expected tier to `EXAMPLES` in the same file.
-- Update [`examples.md`](examples.md) when the user-facing rubric changes.
+- Add a representative input and expected tier **and gate** to `EXAMPLES` in the same file.
+- Update [`examples.md`](examples.md) and [`docs/boundary-gated-confirms.md`](docs/boundary-gated-confirms.md) when the user-facing rubric or gate changes.
 - Prefer a false-positive-resistant signal over a clever opaque rule. Keep explicit model/provider/effort choices as overrides.
 - Run the example suite and inspect both the suggestion line and JSON output.
 - Keep `demo/sample_usage_log.json`, `demo/savings_estimator.py`, and `demo/dashboard.html` honest about example rates and non-live data.
@@ -36,8 +36,12 @@ This repository intentionally has no third-party runtime dependencies:
 ```bash
 python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
-python3 -m compileall -q demo scripts
+python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json \
+  --current-tier max "Rename the variable foo to bar in utils.py"
+python3 -m unittest tests.test_router -v
+python3 -m compileall -q demo scripts auto_model_router.py tests
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
 python3 scripts/validate-plugins.py
 git diff --check
 ```

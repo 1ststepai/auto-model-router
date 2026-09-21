@@ -157,6 +157,23 @@ New-Item -ItemType Directory -Force -Path $LogsDest | Out-Null
 Copy-Item -LiteralPath (Join-Path $DemoSrc "dashboard.html") -Destination (Join-Path $DemoDest "dashboard.html") -Force
 Copy-Item -LiteralPath (Join-Path $DemoSrc "savings_estimator.py") -Destination (Join-Path $DemoDest "savings_estimator.py") -Force
 Copy-Item -LiteralPath (Join-Path $DemoSrc "sample_usage_log.json") -Destination (Join-Path $DemoDest "sample_usage_log.json") -Force
+Copy-Item -LiteralPath (Join-Path $DemoSrc "classify.py") -Destination (Join-Path $DemoDest "classify.py") -Force
+foreach ($name in @("sample_measured_usage.jsonl", "prices.example.json")) {
+  $src = Join-Path $DemoSrc $name
+  if (Test-Path -LiteralPath $src) {
+    Copy-Item -LiteralPath $src -Destination (Join-Path $DemoDest $name) -Force
+  }
+}
+$routerSrc = Join-Path $Root "auto_model_router.py"
+if (Test-Path -LiteralPath $routerSrc) {
+  Copy-Item -LiteralPath $routerSrc -Destination (Join-Path $AmrHome "auto_model_router.py") -Force
+}
+foreach ($scriptName in @("confirm_gate.py", "detect_active.py")) {
+  $src = Join-Path $Root "scripts\$scriptName"
+  if (Test-Path -LiteralPath $src) {
+    Copy-Item -LiteralPath $src -Destination (Join-Path $AmrHome $scriptName) -Force
+  }
+}
 Write-Host "  demo → $DemoDest"
 
 if (Test-Path -LiteralPath $WeeklySrc) {

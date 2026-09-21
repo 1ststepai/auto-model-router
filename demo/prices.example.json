@@ -1,0 +1,10 @@
+{
+  "currency": "USD",
+  "note": "Fill input_per_million and output_per_million for tiers you want priced. Null means the estimator will not invent a dollar rate. This file is an example, not a vendor price list.",
+  "tiers": {
+    "fast": {"input_per_million": null, "output_per_million": null},
+    "standard": {"input_per_million": null, "output_per_million": null},
+    "reasoning": {"input_per_million": null, "output_per_million": null},
+    "max": {"input_per_million": null, "output_per_million": null}
+  }
+}

@@ -21,18 +21,18 @@ Copy-Item skills\auto-model-router\SKILL.md .agents\skills\auto-model-router\SKI
 
 Some older/configured installs also support `$CODEX_HOME/skills` (normally `~/.codex/skills` or `%USERPROFILE%\.codex\skills`).
 
-## Wire suggest → confirm
+## Wire suggest → gate
 
 1. Read task context and classify it as `fast`, `standard`, `reasoning`, or `max`.
-2. Present the suggestion and one-line reason to the user.
-3. Wait for confirmation or a tier/model/effort override before dispatch.
-4. Map the confirmed tier to the Codex model and/or reasoning effort configured for the project, then run.
-5. Escalate toward `reasoning` or `max` after an insufficient light attempt and explain the change once.
+2. Present the suggestion and one-line reason to the user. Auto-continue only clear reversible `fast`.
+3. Wait for confirmation or a tier/model/effort override on spendy or high-risk work. Optional: copy [`../hooks/codex.hooks.json`](../hooks/codex.hooks.json) and trust it in `/hooks`.
+4. Map the gated tier to the Codex model and/or reasoning effort configured for the project, then run.
+5. Escalate toward `reasoning` or `max` after an insufficient light attempt: stop for confirm and explain the change once.
 
 Tier labels are deliberately not Codex product names. Keep the mapping in project instructions so it can evolve with the available Codex models.
 
 ## Verify
 
-Start a new Codex run/session after changing `AGENTS.md` or adding a skill. Ask for a moderate task without selecting a model or reasoning effort. Before editing, Codex should show the `Auto suggests <tier> — <reason>...` line and wait for `confirm` or an explicit override. Put the files in the repository for cloud/background runs.
+Start a new Codex run/session after changing `AGENTS.md` or adding a skill. A clear rename should print `Auto continues on fast`. A moderate or security task should wait for `confirm` or an explicit override. Put the files in the repository for cloud/background runs.
 
 A recorded real session (suggestion line only; no edits) and a copy-paste prompt are in the [README live demo](../README.md#live-demo). That pass is one successful run, not a guarantee that Codex remapped its model picker.

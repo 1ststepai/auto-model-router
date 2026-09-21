@@ -4,7 +4,9 @@
 
 Auto Model Router is a portable instruction skill and a small local heuristic demo. It does not make security decisions, enforce permissions, sandbox an agent, or guarantee safe model selection. Treat the tier suggestion as a workflow aid, not a security control.
 
-The heuristic intentionally routes authentication, secrets, irreversible actions, and other security-sensitive work toward stronger reasoning, but users and host safeguards remain responsible for review and authorization.
+The hard confirm gate (`scripts/confirm_gate.py`) is a local workflow aid, not a security control. It can deny agent tool calls only when the host hook is installed. It cannot stop native Auto pickers, vendor GUIs, or hosted tools outside PreToolUse. AMR cannot read usage meters and cannot flip a host picker by itself.
+
+The heuristic intentionally routes authentication, secrets, irreversible actions, and other security-sensitive work toward stronger reasoning and a hard-gate, but users and host safeguards remain responsible for review and authorization.
 
 ## Secrets and sensitive data
 

@@ -1,6 +1,12 @@
-Auto Model Router demo — suggest → confirm
+Auto Model Router demo — boundary-gated suggest → confirm
+
+User: Rename the variable foo to bar in utils.py
+Agent: Auto continues on **fast** — Clear, bounded, low-judgment task; lightest configured provider tier.
 
 User: Wire up a CRUD endpoint using the existing handler pattern.
 Agent: Auto suggests **standard** — Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient. Confirm to run, or override (fast | standard | reasoning | max).
 User: confirm
 Agent: Confirmed standard. Running with the host's configured standard model/effort.
+
+User: Review this auth change for XSS and credential leaks
+Agent: Auto suggests **reasoning** — Ambiguous requirements, unknown-cause debug, architecture, or security-sensitive work. Confirm required (high-risk / hard to undo), or override (fast | standard | reasoning | max).

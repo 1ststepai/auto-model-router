@@ -29,16 +29,16 @@ Copy-Item skills\auto-model-router\SKILL.md "$env:USERPROFILE\.cursor\skills\aut
 
 An optional always-apply `.cursor/rules/auto-model-router.mdc` can point at the project skill. Keep the rule short; the full example is in [`../INSTALL.md`](../INSTALL.md).
 
-## Wire suggest → confirm
+## Wire suggest → gate
 
-1. Before a model-dependent task, assess context and classify it as `fast`, `standard`, `reasoning`, or `max`.
-2. Show `Auto suggests <tier> — <reason>. Confirm to run, or override...` in chat.
-3. Wait for the user's confirmation or model/tier override.
-4. Use Cursor's model picker and available effort controls to map the confirmed tier, then run.
-5. If the attempt is clearly too light, explain the escalation once and select a stronger configured option.
+1. Before a model-dependent task, assess context and classify it as `fast`, `standard`, `reasoning`, or `max`. Decide the gate (`auto_continue`, `confirm`, `hard_gate`).
+2. Show `Auto continues on fast — …` or `Auto suggests <tier> — <reason>. Confirm to run, or override...` in chat. If `.auto-model-router/cursor-tier-map.json` exists, name the mapped picker/effort (placeholders only — never invent a vendor name).
+3. Auto-continue only clear reversible `fast`. Wait for confirmation on spendy / high-risk work. Optional: copy [`../hooks/cursor.hooks.json`](../hooks/cursor.hooks.json) to `.cursor/hooks.json` so PreToolUse is denied until confirm.
+4. Use Cursor's model picker and available effort controls to map the gated tier, then run.
+5. If the attempt is clearly too light, stop for confirm, explain the escalation once, and select a stronger configured option.
 
-Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill.
+Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill. Copy [`cursor-tier-map.example.json`](cursor-tier-map.example.json) and fill in your labels. `python3 scripts/detect_active.py` only reads local env/config/log.
 
 ## Verify
 
-Start a new Agent chat (or restart Cursor after a user-wide install), ask for a moderate task without naming a model, and confirm that the `Auto suggests <tier> — <reason>...` line appears before edits. Reply `confirm` or override the tier. Cursor's native Auto picker is separate and may still choose silently.
+Start a new Agent chat (or restart Cursor after a user-wide install). A clear rename should print `Auto continues on fast`. A moderate or security task should wait. Reply `confirm` or override the tier. Cursor's native Auto picker is separate and may still choose silently.

@@ -208,6 +208,24 @@ mkdir -p "$DEMO_DEST" "$LOGS_DEST"
 cp "$DEMO_SRC/dashboard.html" "$DEMO_DEST/dashboard.html"
 cp "$DEMO_SRC/savings_estimator.py" "$DEMO_DEST/savings_estimator.py"
 cp "$DEMO_SRC/sample_usage_log.json" "$DEMO_DEST/sample_usage_log.json"
+cp "$DEMO_SRC/classify.py" "$DEMO_DEST/classify.py"
+if [[ -f "$DEMO_SRC/sample_measured_usage.jsonl" ]]; then
+  cp "$DEMO_SRC/sample_measured_usage.jsonl" "$DEMO_DEST/sample_measured_usage.jsonl"
+fi
+if [[ -f "$DEMO_SRC/prices.example.json" ]]; then
+  cp "$DEMO_SRC/prices.example.json" "$DEMO_DEST/prices.example.json"
+fi
+if [[ -f "$ROOT/auto_model_router.py" ]]; then
+  cp "$ROOT/auto_model_router.py" "$AMR_HOME/auto_model_router.py"
+fi
+if [[ -f "$ROOT/scripts/confirm_gate.py" ]]; then
+  cp "$ROOT/scripts/confirm_gate.py" "$AMR_HOME/confirm_gate.py"
+  chmod +x "$AMR_HOME/confirm_gate.py"
+fi
+if [[ -f "$ROOT/scripts/detect_active.py" ]]; then
+  cp "$ROOT/scripts/detect_active.py" "$AMR_HOME/detect_active.py"
+  chmod +x "$AMR_HOME/detect_active.py"
+fi
 echo "  demo → $DEMO_DEST"
 
 if [[ -f "$WEEKLY_SRC" ]]; then

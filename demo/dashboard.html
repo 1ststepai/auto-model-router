@@ -29,13 +29,14 @@
   <main>
     <h1>Auto Model Router savings estimator</h1>
     <p class="banner">Estimates from your routing log, not live Cursor/Claude billing.</p>
-    <p>This uses example relative rates: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>. Percentages are estimates from the supplied local routing log, not measured vendor savings. It never accesses credentials, GUI state, tokens, or vendor billing APIs.</p>
+    <p>When a log row includes <code>cost_usd</code> (or tokens plus a price table you filled), those measured figures are used. Rows with only a tier fall back to example relative rates: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>. Percentages from that fallback are estimates from the supplied local routing log, not measured vendor savings. It never accesses credentials, GUI state, or vendor billing APIs.</p>
     <p class="muted">Use this alongside context tools such as <strong>lean.ctx</strong> or <strong>ponytail</strong>: those reduce context sent, while this router addresses model-tier overkill. It can help slow usage burn only when a confirmed lighter tier maps to a cheaper/faster model or lower effort and actually runs. No affiliation is implied, and no savings are guaranteed.</p>
 
     <h2>Load a routing log</h2>
-    <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>.</p>
+    <p>Load the included sample, the measured sample (<code>cost_usd</code> when present), choose a JSON/JSONL file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and optional <code>input_tokens</code> / <code>output_tokens</code> / <code>cost_usd</code>.</p>
     <button id="sample">Load sample log</button>
-    <input id="file" type="file" accept="application/json,.json">
+    <button id="measured">Load measured sample</button>
+    <input id="file" type="file" accept="application/json,.json,.jsonl">
     <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>
     <br><button id="calculate">Calculate estimates</button>
     <span id="status" class="muted" role="status"></span>
@@ -44,6 +45,9 @@
       <h2>Estimate</h2>
       <div class="cards">
         <div class="card">Tasks<span id="tasks" class="value">—</span></div>
+        <div class="card">Basis<span id="basis" class="value">—</span></div>
+        <div class="card">Logged tokens<span id="tokens" class="value">—</span></div>
+        <div class="card">Measured USD<span id="measured-usd" class="value">—</span></div>
         <div class="card">Vs always-reasoning<span id="reasoning-saved" class="value">—</span></div>
         <div class="card">Vs always-max<span id="max-saved" class="value">—</span></div>
         <div class="card">Override rate<span id="override" class="value">—</span></div>
@@ -168,44 +172,69 @@ function calculate(payload) {
   const rows = entries(payload);
   if (!rows.length) throw new Error("The routing log is empty");
   const counts = Object.fromEntries(TIERS.map(t => [t, 0]));
-  let units = 0, overrides = 0;
+  let units = 0, overrides = 0, priced = 0, illustrative = 0, cost = 0, inTok = 0, outTok = 0;
   rows.forEach((row, i) => {
     if (!row || !TIERS.includes(row.tier)) throw new Error(`Entry ${i + 1} has an invalid tier`);
     counts[row.tier]++;
-    units += RATES[row.tier];
     if (row.overridden === true) overrides++;
+    if (Number.isFinite(row.input_tokens)) inTok += row.input_tokens;
+    if (Number.isFinite(row.output_tokens)) outTok += row.output_tokens;
+    const logged = Number(row.cost_usd);
+    if (row.cost_usd != null && Number.isFinite(logged)) {
+      cost += logged;
+      priced++;
+    } else {
+      units += RATES[row.tier];
+      illustrative++;
+    }
   });
-  const alwaysReasoning = rows.length * RATES.reasoning;
-  const alwaysMax = rows.length * RATES.max;
-  const pct = base => Math.round((base - units) / base * 1000) / 10;
+  const alwaysReasoning = illustrative * RATES.reasoning;
+  const alwaysMax = illustrative * RATES.max;
+  const pct = base => base > 0 ? Math.round((base - units) / base * 1000) / 10 : null;
+  let basis = "illustrative_tier_rates";
+  if (priced && illustrative) basis = "mixed";
+  else if (priced) basis = "measured";
   return {
-    rates_are: "illustrative relative example units, not vendor prices",
-    example_rates: RATES,
+    basis,
+    rates_are: illustrative ? "illustrative relative example units, not vendor prices" : "measured local log fields, not vendor prices",
+    example_rates: illustrative ? RATES : null,
     task_count: rows.length,
     tasks_by_tier: counts,
     override_count: overrides,
     override_rate_pct: Math.round(overrides / rows.length * 1000) / 10,
-    routed_relative_units: units,
-    always_reasoning_relative_units: alwaysReasoning,
-    always_max_relative_units: alwaysMax,
+    input_tokens: inTok,
+    output_tokens: outTok,
+    priced_entry_count: priced,
+    illustrative_entry_count: illustrative,
+    measured_cost_usd: priced ? Math.round(cost * 1e6) / 1e6 : null,
+    routed_relative_units: illustrative ? units : null,
     estimated_savings_vs_always_reasoning_pct: pct(alwaysReasoning),
-    estimated_savings_vs_always_max_pct: pct(alwaysMax)
+    estimated_savings_vs_always_max_pct: pct(alwaysMax),
+    billing_api_accessed: false
   };
 }
 function render(payload) {
   const result = calculate(payload);
   $("results").hidden = false;
   $("tasks").textContent = result.task_count;
-  $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct + "%";
-  $("max-saved").textContent = result.estimated_savings_vs_always_max_pct + "%";
+  $("basis").textContent = result.basis;
+  $("tokens").textContent = result.input_tokens + " / " + result.output_tokens;
+  $("measured-usd").textContent = result.measured_cost_usd == null ? "n/a" : "$" + result.measured_cost_usd;
+  $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct == null ? "n/a" : result.estimated_savings_vs_always_reasoning_pct + "%";
+  $("max-saved").textContent = result.estimated_savings_vs_always_max_pct == null ? "n/a" : result.estimated_savings_vs_always_max_pct + "%";
   $("override").textContent = result.override_rate_pct + "%";
   const maxCount = Math.max(...Object.values(result.tasks_by_tier), 1);
   $("chart").innerHTML = TIERS.map(t => `<div class="row"><strong>${t}</strong><div class="track"><div class="bar ${t}" style="width:${result.tasks_by_tier[t] / maxCount * 100}%"></div></div><span>${result.tasks_by_tier[t]}</span></div>`).join("");
   $("json").textContent = JSON.stringify(result, null, 2);
   $("status").textContent = " Loaded successfully.";
 }
+function parseLog(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("[" ) || trimmed.startsWith("{")) return JSON.parse(trimmed);
+  return trimmed.split("\n").filter(Boolean).map(line => JSON.parse(line));
+}
 function loadText(text) {
-  try { render(JSON.parse(text)); }
+  try { render(parseLog(text)); }
   catch (error) { $("status").textContent = " Error: " + error.message; $("results").hidden = true; }
 }
 $("sample").addEventListener("click", async () => {
@@ -219,6 +248,17 @@ $("sample").addEventListener("click", async () => {
     $("input").value = JSON.stringify(SAMPLE, null, 2);
     render(SAMPLE);
     $("status").textContent = " Loaded embedded sample (file fetch was unavailable).";
+  }
+});
+$("measured").addEventListener("click", async () => {
+  try {
+    const response = await fetch("sample_measured_usage.jsonl");
+    if (!response.ok) throw new Error("measured sample unavailable");
+    const text = await response.text();
+    $("input").value = text;
+    loadText(text);
+  } catch (error) {
+    $("status").textContent = " Error: " + error.message + " Open this page next to demo/sample_measured_usage.jsonl.";
   }
 });
 $("calculate").addEventListener("click", () => loadText($("input").value));

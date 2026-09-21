@@ -3,7 +3,7 @@
   "name": "auto-model-router",
   "displayName": "Auto Model Router",
   "version": "1.0.0",
-  "description": "A transparent, user-confirmed policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
+  "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
   "author": {
     "name": "1ststepai",
     "url": "https://github.com/1ststepai"

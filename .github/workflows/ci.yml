@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+    branches: ["main", "cursor/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Rubric, estimator, plugins, and router tests
+        run: |
+          python3 demo/classify.py --examples
+          python3 demo/savings_estimator.py demo/sample_usage_log.json
+          python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
+          python3 -m unittest tests.test_router -v
+          python3 scripts/validate-plugins.py
+          python3 -m compileall -q demo scripts auto_model_router.py tests

@@ -20,7 +20,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-TIERS = ("fast", "standard", "reasoning", "max")
+HERE = Path(__file__).resolve()
+for _base in (HERE.parent, HERE.parent.parent, Path(os.environ.get("HOME") or os.environ.get("USERPROFILE") or "") / ".auto-model-router"):
+    if (_base / "auto_model_router.py").is_file() and str(_base) not in sys.path:
+        sys.path.insert(0, str(_base))
+        break
+
+try:
+    from auto_model_router import TIERS, summarize_usage
+except ImportError:
+    TIERS = ("fast", "standard", "reasoning", "max")
+    summarize_usage = None  # type: ignore[assignment]
+
 EXAMPLE_RATES = {"fast": 1.0, "standard": 3.0, "reasoning": 8.0, "max": 20.0}
 
 DEFAULT_CONFIG = {
@@ -134,6 +145,15 @@ def filter_window(
 
 
 def summarize(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    hosts: Counter = Counter()
+    for item in entries:
+        host = item.get("host")
+        if host:
+            hosts[str(host)] += 1
+    if summarize_usage is not None:
+        usage = summarize_usage(entries)
+        usage["hosts"] = dict(hosts)
+        return usage
     by_tier = Counter()
     confirmed = 0
     overridden = 0
@@ -171,6 +191,8 @@ def summarize(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         "routed_relative_units": round(routed, 2),
         "estimated_savings_vs_always_reasoning_pct": pct_saved(always_reasoning, routed),
         "estimated_savings_vs_always_max_pct": pct_saved(always_max, routed),
+        "basis": "illustrative_tier_rates",
+        "billing_api_accessed": False,
     }
 
 
@@ -196,7 +218,8 @@ def human_report(
         f"Log: {log_path}",
         "",
         "Honest scope: local usage log only. Not live Cursor/Claude/Codex billing.",
-        "Rates below are illustrative relative units, not vendor prices.",
+        f"Basis: {summary.get('basis', 'illustrative_tier_rates')}. "
+        "Tier-only rows use illustrative relative units, not vendor prices.",
         "",
     ]
     if used_sample:
@@ -208,19 +231,38 @@ def human_report(
     if summary["task_count"] == 0:
         lines.extend([
             "No routing decisions in this window.",
-            "After confirmed runs, agents may append non-sensitive lines to usage.jsonl.",
+            "After authorized runs (confirm or auto-continue), agents may append non-sensitive lines to usage.jsonl.",
             "See SKILL.md for the schema. Nothing is forced; weekly review stays opt-in.",
         ])
         return "\n".join(lines)
 
     lines.extend([
         f"Decisions in window: {summary['task_count']} ({counts})",
-        f"Confirmed: {summary['confirmed_count']}  |  Overrides: {summary['override_count']} "
+        f"Confirmed / auto-continue: {summary['confirmed_count']}  |  Overrides: {summary['override_count']} "
         f"({summary['override_rate_pct']}%)",
-        f"Routed usage: {summary['routed_relative_units']:.1f} relative units",
-        f"Est. savings vs always-reasoning: {summary['estimated_savings_vs_always_reasoning_pct']:.1f}%",
-        f"Est. savings vs always-max: {summary['estimated_savings_vs_always_max_pct']:.1f}%",
     ])
+    if summary.get("input_tokens") or summary.get("output_tokens"):
+        lines.append(
+            f"Tokens logged: input={summary.get('input_tokens', 0)} output={summary.get('output_tokens', 0)}"
+        )
+    if summary.get("measured_cost_usd") is not None:
+        lines.append(f"Measured cost (cost_usd rows): ${summary['measured_cost_usd']}")
+    illustrative = summary.get("illustrative") or {}
+    routed = summary.get("routed_relative_units")
+    if routed is None and illustrative:
+        routed = illustrative.get("routed_relative_units")
+    vs_r = summary.get("estimated_savings_vs_always_reasoning_pct")
+    if vs_r is None and illustrative:
+        vs_r = illustrative.get("estimated_savings_vs_always_reasoning_pct")
+    vs_m = summary.get("estimated_savings_vs_always_max_pct")
+    if vs_m is None and illustrative:
+        vs_m = illustrative.get("estimated_savings_vs_always_max_pct")
+    if routed is not None:
+        lines.append(f"Routed usage (illustrative rows): {routed:.1f} relative units")
+    if vs_r is not None:
+        lines.append(f"Est. savings vs always-reasoning (illustrative rows): {vs_r:.1f}%")
+    if vs_m is not None:
+        lines.append(f"Est. savings vs always-max (illustrative rows): {vs_m:.1f}%")
     if summary["hosts"]:
         host_bits = ", ".join(f"{h}={n}" for h, n in sorted(summary["hosts"].items()))
         lines.append(f"Hosts (when logged): {host_bits}")
