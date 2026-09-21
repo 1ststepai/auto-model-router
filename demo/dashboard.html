@@ -14,7 +14,7 @@
     button { cursor: pointer; padding: .45rem .8rem; border-radius: .4rem; border: 1px solid #888; }
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; margin: 1rem 0; }
     .card { border: 1px solid #8886; border-radius: .6rem; padding: .8rem; }
-    .value { display: block; font-size: 1.55rem; font-weight: 750; }
+    .value { display: block; font-size: 1.55rem; font-weight: 750; overflow-wrap: anywhere; }
     .chart { display: grid; gap: .65rem; margin: 1rem 0 2rem; max-width: 700px; }
     .row { display: grid; grid-template-columns: 95px 1fr 70px; align-items: center; gap: .6rem; }
     .track { height: 1.1rem; background: #8884; border-radius: .4rem; overflow: hidden; }
@@ -217,7 +217,11 @@ function render(payload) {
   const result = calculate(payload);
   $("results").hidden = false;
   $("tasks").textContent = result.task_count;
-  $("basis").textContent = result.basis;
+  $("basis").textContent = ({
+    mixed: "mixed",
+    measured: "measured",
+    illustrative_tier_rates: "illustrative"
+  }[result.basis] || result.basis);
   $("tokens").textContent = result.input_tokens + " / " + result.output_tokens;
   $("measured-usd").textContent = result.measured_cost_usd == null ? "n/a" : "$" + result.measured_cost_usd;
   $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct == null ? "n/a" : result.estimated_savings_vs_always_reasoning_pct + "%";
@@ -230,8 +234,12 @@ function render(payload) {
 }
 function parseLog(text) {
   const trimmed = text.trim();
-  if (trimmed.startsWith("[" ) || trimmed.startsWith("{")) return JSON.parse(trimmed);
-  return trimmed.split("\n").filter(Boolean).map(line => JSON.parse(line));
+  if (trimmed.startsWith("[")) return JSON.parse(trimmed);
+  try {
+    return JSON.parse(trimmed);
+  } catch (_) {
+    return trimmed.split("\n").filter(Boolean).map(line => JSON.parse(line));
+  }
 }
 function loadText(text) {
   try { render(parseLog(text)); }
