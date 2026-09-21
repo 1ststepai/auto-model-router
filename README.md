@@ -8,11 +8,65 @@
 
 **A transparent, user-confirmed policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, or any agent with custom instructions or skills**—without requiring vendor-specific model names or APIs.
 
-An open-source, provider-agnostic skill for routing coding-agent work to the lightest model or effort tier that can do it well.
+An open-source, provider-agnostic skill for routing coding-agent work to the lightest model or effort tier that can do it well. Product page: [1stStep Auto Model Router](https://www.1ststep.ai/tools/auto-model-router/).
 
 **Flow:** context → classify (`fast` / `standard` / `reasoning` / `max`) → suggest → user confirm/override → run.
 
 The repository contains a portable skill, small offline heuristic demo, integration notes, and examples. Copy the skill into each project or add it to your user-level agent instructions so all your projects can use the same routing policy.
+
+## Live demo
+
+This is a **real Codex pass from Evan (1stStep)**, not the illustrated examples on the [product page](https://www.1ststep.ai/tools/auto-model-router/) and not a vendor benchmark. Codex loaded the skill, printed the required suggestion line, and **waited** — it did not edit files. That is the suggest → confirm contract. It does **not** mean Codex remapped its model or reasoning-effort picker by itself, and it is not a usage-savings measurement.
+
+![Codex live pass: Auto suggests fast on skill activation, then again on a single-file rename test](docs/images/codex-live-pass.png)
+
+Quoted replies from that session:
+
+**Activation** (skill loaded; no task yet)
+
+```text
+Auto suggests fast — no substantial work has been requested yet. Confirm to run, or override: fast / standard / reasoning / max.
+```
+
+**Rename test** (classify only; stop before edits)
+
+```text
+Auto suggests fast — this is a small, reversible, single-file rename with same-file call sites. Confirm to run, or override: fast / standard / reasoning / max.
+```
+
+Your session may differ if the skill is missing, the chat is old, or you already named a model or effort.
+
+### Try it in Codex
+
+Install the skill first ([Codex notes](integrations/CODEX.md) / [INSTALL.md](INSTALL.md)), start a **new** Codex session, then paste:
+
+```text
+Load and follow the auto-model-router skill for this session.
+
+Before substantial work: read context → classify the lightest sufficient tier (fast / standard / reasoning / max) → suggest the tier and a one-line why → wait for my confirm or override → then run.
+
+Do not silently pick a heavy model for simple work. Prefer lighter when reversible. Never under-provision security or irreversible actions. Escalate once if a light attempt fails.
+
+Confirm you're using auto-model-router by starting your next non-trivial reply with a suggestion in this format:
+Auto suggests <tier> — <reason>. Confirm to run, or override: fast / standard / reasoning / max.
+```
+
+After you see a suggestion line, paste this classification test. Do **not** reply `confirm` unless you want the rename to run — the live pass above stopped before confirm:
+
+```text
+Follow the auto-model-router skill in this session (codex/skills/auto-model-router/SKILL.md or .agents/skills/auto-model-router/SKILL.md).
+
+TEST — do not write code yet.
+
+Task to classify: "Rename the function getUserName to fetchUserName in one file and update its call sites in that same file."
+
+1. Suggest the lightest sufficient tier (fast / standard / reasoning / max) with a one-line reason.
+2. STOP and wait for my confirm or override.
+3. Do not edit files until I say confirm (or a different tier).
+
+Reply ONLY in this shape first:
+Auto suggests <tier> — <reason>. Confirm to run, or override: fast / standard / reasoning / max.
+```
 
 ## Install
 
@@ -219,6 +273,7 @@ scripts/weekly_review.py               # opt-in local usage-log weekly summary
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md
+docs/images/codex-live-pass.png        # real Codex live-demo screenshot
 demo/classify.py                       # offline heuristic checker
 demo/savings_estimator.py              # relative usage estimator
 demo/sample_usage_log.json             # fake demo routing log
