@@ -108,7 +108,7 @@ After it opens, click **Load sample log** for illustrative estimates (not live C
 
 ## Optional weekly review
 
-Weekly reviews summarize your **local** `~/.auto-model-router/logs/usage.jsonl` (tiers confirmed/overridden, counts, illustrative relative-unit estimates). They do **not** read Cursor, Claude Code, Codex, or any vendor billing/token API.
+Weekly reviews summarize your **local** `~/.auto-model-router/logs/usage.jsonl` (tiers confirmed/overridden, token totals, and `cost_usd` when the log has it). Tier-only rows use labeled illustrative relative units. They do **not** read Cursor, Claude Code, Codex, or any vendor billing API, and they do not apply a price table.
 
 ```bash
 # Enable / disable (persists weeklyReview in config.json)
@@ -179,7 +179,7 @@ For a user-wide install, follow the host-specific paths below. Then **start a ne
 Auto suggests standard — this multi-file routine change fits the standard tier. Confirm to run, or override: fast, standard, reasoning, or max.
 ```
 
-Confirm (or override) before allowing the agent to edit. If the host cannot pause, the suggestion must still appear and your next instruction acts as confirmation.
+Confirm (or override) before allowing the agent to edit. If the hard gate is installed, a spendy tier cannot run tools until that confirm is recorded by the prompt hook or `confirm_gate.py --confirm`. If the gate is not installed, the suggestion line is only a request — the host can still skip it.
 
 ## Cursor
 
@@ -351,15 +351,55 @@ Some older or configured Codex installations also scan `$CODEX_HOME/skills` (nor
 
 Start a new Codex run/session so `AGENTS.md` and the skill are read. Ask for a moderate task without selecting a model or reasoning effort. Before making changes, Codex should print the suggestion line and wait for `confirm` or an explicit override. If a TUI session loads instructions only at startup, fully restart it after changing `AGENTS.md`.
 
+## Hard confirm gate
+
+The skill text is not a block. Codex (and any other host) can skip suggest → confirm unless a hook denies the tool call. This repo ships that hook.
+
+Spendy tiers are `standard`, `reasoning`, and `max`. `fast` may run tools without a second confirm. With no tier on file, tools are denied.
+
+`scripts/confirm_gate.py` reads hook JSON on stdin. It exits **0** to allow and **2** to deny, and it prints `permissionDecision: deny` for hosts that read JSON. Tool arguments cannot set `confirmed`. A prompt event (`UserPromptSubmit` / Cursor `beforeSubmitPrompt`) is what records the user's `confirm`, `yes`, or a bare tier override. You can also confirm from your own terminal, which is not an agent tool:
+
+```bash
+python3 scripts/confirm_gate.py --suggest "Wire up a CRUD endpoint using the existing handler pattern"
+python3 scripts/confirm_gate.py --confirm standard
+```
+
+After `./scripts/apply.sh`, the same script is at `~/.auto-model-router/confirm_gate.py`.
+
+Copy a snippet into the host config. Paths are relative to the project that contains this script. Set `failClosed: true` on Cursor's pre-tool hook so a crash denies instead of allowing.
+
+| Host | What to install | What it blocks |
+| --- | --- | --- |
+| Cursor | Copy [`hooks/cursor.hooks.json`](hooks/cursor.hooks.json) to `.cursor/hooks.json`. Also keep [`.cursor/rules/auto-model-router.mdc`](.cursor/rules/auto-model-router.mdc); the rule is only a reminder. | `preToolUse` (shell, edits, MCP, and other agent tools) when the hook is loaded. Cloud agents load a committed `.cursor/hooks.json`. This repo does **not** commit that file, so a clone is not gated until you copy it. |
+| Claude Code | Merge [`hooks/claude.settings.snippet.json`](hooks/claude.settings.snippet.json) into `.claude/settings.json` (project) or `~/.claude/settings.json`. | `PreToolUse` for matching tools. Exit 2 is the block. |
+| Codex | Copy [`hooks/codex.hooks.json`](hooks/codex.hooks.json) to `.codex/hooks.json` or `~/.codex/hooks.json`, or inline the same tables in `config.toml`. Run `/hooks` and trust the script. | Local tools on the `PreToolUse` path: shell, `apply_patch`, MCP, other local function tools. |
+
+Library callers (including a future CodeFriends agent) use `route` / `evaluate_tool` in [`auto_model_router.py`](auto_model_router.py). They must pass boolean `confirmed=True` only after a real user confirm. See the call shape in [`SKILL.md`](SKILL.md).
+
+### What still cannot hard-block
+
+- A skill, `AGENTS.md`, or Cursor rule with no hook. The model can ignore it.
+- Cursor's built-in Auto picker and any vendor GUI that changes model or spend without an agent tool call.
+- Codex hosted tools such as web search. They do not use the local `PreToolUse` path.
+- A hook the user has not trusted (`/hooks` in Codex) or a project that never copied `hooks.json`.
+- Subagents or tool paths a vendor runs outside `PreToolUse`. Treat the hook as the strongest block this repo can install, not a sandbox.
+
+Tests in `tests/test_router.py` show a forged `confirmed: true` inside tool arguments is denied, and a real prompt confirm is allowed.
+
 ## Savings estimator (optional)
 
-The repository includes an honest, offline MVP for estimating relative costs from routing decisions. It does not read live Cursor, Claude Code, or Codex billing/token data, scrape a GUI, or access credentials. It uses example relative rates only: `fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`; any percentage is an estimate from your supplied local log, not a guarantee or measured vendor saving.
+The repository includes an offline estimator for a **local** routing log. It does not read live Cursor, Claude Code, or Codex billing, scrape a GUI, or access credentials.
+
+- Rows with `cost_usd` are summed as dollars.
+- Rows with `input_tokens` / `output_tokens` are priced only if you pass `--prices` pointing at a table you filled. Start from [`demo/prices.example.json`](demo/prices.example.json). Null rates are not filled in for you.
+- Rows with only a tier use example relative rates (`fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`). The report labels that fallback. It is not a dollar figure and not a measured vendor saving.
 
 ```bash
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
 ```
 
-You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log**, or paste your own JSON. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
+You can pass a JSON list of task strings (the demo classifies them), a decision log, or a `usage.jsonl` file. Fields are `tier`, `confirmed`, `overridden`, `timestamp`, and optionally `input_tokens`, `output_tokens`, `cost_usd`, and `currency`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo. **Load sample log** is the tier-only fallback. **Load measured sample** shows logged dollars plus one unlabeled-tier row. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default, and never invent token or dollar fields.
 
 ## Any other agent
 

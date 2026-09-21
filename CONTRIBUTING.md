@@ -38,6 +38,7 @@ python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
 python3 -m compileall -q demo scripts
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 -m unittest tests.test_router -v
 python3 scripts/validate-plugins.py
 git diff --check
 ```

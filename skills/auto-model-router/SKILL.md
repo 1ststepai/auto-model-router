@@ -20,16 +20,16 @@ Use before dispatching substantial coding-agent work or choosing a model/effort 
 
 1. **Read context.** Assess scope, involved files or systems, ambiguity, required judgment, security or external-action risk, and whether the work is reversible.
 2. **Honor an explicit override.** If the user already chose a model, provider, effort, or tier, use that choice and skip an unsolicited suggestion.
-3. **Classify** the open choice into the lightest sufficient tier using the rubric below. An optional offline helper is `demo/classify.py` or `demo/classify.py --suggest`; it is only a heuristic second opinion.
+3. **Classify** the open choice into the lightest sufficient tier using the rubric below. Read `confidence` (0–1). When confidence is low on a vague prompt, the tier is **standard**, not a guessed **max** or **fast**, and confirmation is required. An optional offline helper is `demo/classify.py` or `demo/classify.py --suggest`; it is only a heuristic second opinion and it applies that downshift.
 4. **Suggest before dispatch.** Give the tier and a short plain-language reason, for example:
 
    ```text
    Auto suggests reasoning — unknown-root-cause auth debugging needs investigation. Confirm to run, or override: fast, standard, reasoning, or max.
    ```
 
-5. **Wait for confirmation or override.** Accept a clear confirmation (`confirm`, `yes`, or equivalent) or a tier/model choice. Do not silently change the user's selected model. If the host cannot pause, return the suggestion and let the user's next instruction authorize the run.
-6. **Map the tier through the host adapter** described below, then run only after confirmation or an explicit override.
-7. **Escalate when needed.** If a light attempt fails or clearly needs more judgment, say once that you are escalating and continue toward `reasoning` or `max` as appropriate.
+5. **Wait for confirmation or override.** Accept a clear confirmation (`confirm`, `yes`, or equivalent) or a tier/model choice. Do not silently change the user's selected model. **fast** may run tools without a second confirm. **standard**, **reasoning**, and **max** are spendy: do not execute tools until the user confirms. Chat text alone is not a hard block — install `scripts/confirm_gate.py` (see INSTALL.md). The hook exits 2 and returns `permission: deny`. Tool arguments that set `confirmed: true` are ignored.
+6. **Map the tier through the host adapter** described below, then run only after the gate allows it (fast, or an explicit confirm/override).
+7. **Escalate when needed.** If a light attempt fails or clearly needs more judgment, say once that you are escalating and continue toward `reasoning` or `max` as appropriate. Escalating to a spendy tier needs a new confirm before tools run.
 
 ## Tier rubric
 
@@ -70,6 +70,19 @@ Auto suggests <tier> — <short reason>. Confirm to run, or override: fast, stan
 - Do not stay at `fast` after a failed attempt that needs judgment.
 - Do not ignore an explicit model, provider, effort, or tier choice.
 - Do not present heuristic output as a production-quality classifier or as an official vendor recommendation.
+- Do not guess **max** when confidence is low. Vague prompts stay on **standard** until the user confirms.
+- Do not treat a tool argument, a model-written note, or an uninstalled hook as confirmation for a spendy tier.
+
+## Hard confirm gate
+
+Spendy tiers (`standard`, `reasoning`, `max`) must not execute tools before an explicit user confirm. The skill text can be skipped; the hook cannot, once installed.
+
+- Library: `evaluate_tool` / `route` in [`auto_model_router.py`](auto_model_router.py). `confirmed` counts only when it is the boolean `true`.
+- Hook: `python3 scripts/confirm_gate.py` on the user-prompt event and on `PreToolUse` (Cursor `preToolUse` with `failClosed: true`). Exit code 2 blocks the tool.
+- The user confirms by sending `confirm` / `yes` / a tier name through the prompt hook, or by running `python3 scripts/confirm_gate.py --confirm <tier>` in their own terminal. An agent tool that runs `--confirm` is denied.
+- Install snippets: [`hooks/cursor.hooks.json`](hooks/cursor.hooks.json), [`hooks/claude.settings.snippet.json`](hooks/claude.settings.snippet.json), [`hooks/codex.hooks.json`](hooks/codex.hooks.json). Cursor also has [`.cursor/rules/auto-model-router.mdc`](.cursor/rules/auto-model-router.mdc); that rule is not a block by itself.
+
+Hosts with no pre-tool hook still only have the suggestion line. That is not a hard block. Codex hosted tools such as web search are outside the local hook path. See INSTALL.md.
 
 ## Optional local usage log
 
@@ -78,10 +91,32 @@ After a confirmed run, a host **may** append one JSON object per run to `.auto-m
 Minimum schema (one object per line):
 
 ```json
-{"timestamp":"2026-09-20T13:00:00Z","tier":"standard","confirmed":true,"overridden":false}
+{"timestamp":"2026-09-20T13:00:00Z","tier":"standard","confirmed":true,"overridden":false,"input_tokens":1200,"output_tokens":300,"cost_usd":0.01,"currency":"USD"}
 ```
 
-Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields include `suggested_tier`, `host`, and a non-sensitive `task_kind`. Do not log prompts, task text, code, secrets, customer data, or provider credentials by default. The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
+Required fields are `timestamp` (ISO 8601), `tier` (`fast`, `standard`, `reasoning`, or `max`), `confirmed` (boolean), and `overridden` (boolean). Optional fields: `suggested_tier`, `host`, `confidence`, a non-sensitive `task_kind`, and — when the host already has them — `input_tokens`, `output_tokens`, `cost_usd`, and `currency`. Do not log prompts, task text, code, secrets, customer data, or provider credentials by default. Do not invent token counts or dollar amounts. If a row has only `tier`, the estimator labels illustrative relative units (`fast=1`, `standard=3`, `reasoning=8`, `max=20`). Those are not prices. Real dollars need `cost_usd` or a local price table you fill from [`demo/prices.example.json`](demo/prices.example.json). The log is local project data and should only be committed if the project explicitly wants to share an anonymized sample.
+
+## CodeFriends (optional)
+
+CodeFriends does not have to call this. Agents that want the same policy and the same log use `route` from [`auto_model_router.py`](auto_model_router.py):
+
+```python
+from auto_model_router import route
+
+result = route(
+    task,
+    confirmed=True,  # boolean True only after an explicit user confirm
+    override=None,   # or "fast" | "standard" | "reasoning" | "max"
+    host="codefriends",
+    log_path=".auto-model-router/usage.jsonl",
+    usage={"input_tokens": 100, "output_tokens": 20, "cost_usd": 0.002, "currency": "USD"},
+)
+if not result["allowed"]:
+    # show result["suggestion"]; do not run tools
+    ...
+```
+
+`usage` is optional. Omit it rather than inventing tokens or cost.
 
 ## On apply / first use
 
@@ -102,7 +137,7 @@ Do not claim the skill auto-opened a browser just because it was loaded; only cl
 If `weeklyReview` is `true` in `~/.auto-model-router/config.json`, or the user asks what the router did this week / for a weekly summary:
 
 1. Run `python3 ~/.auto-model-router/weekly_review.py` (or `python3 scripts/weekly_review.py --force` from a clone). Use `--force` when the preference is off but the user explicitly asked.
-2. Summarize the printed report honestly: it covers the **local** `usage.jsonl` only (tier counts, confirms/overrides, relative-unit estimates). It is **not** live Cursor/Claude/Codex billing.
+2. Summarize the printed report honestly: it covers the **local** `usage.jsonl` only. Rows with `cost_usd` are summed as dollars. Rows with only a tier use labeled relative-unit estimates. It is **not** live Cursor/Claude/Codex billing, and it does not read a price table.
 3. If the log is empty, say so; the script may show the sample log format — label that as sample, not the user's history.
 4. Do not install cron/Task Scheduler jobs unless the user explicitly asks; point them at `--install-schedule` / `-InstallSchedule` or the cron examples in INSTALL.md.
 

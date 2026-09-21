@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 scripts/confirm_gate.py"
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 scripts/confirm_gate.py",
+        "failClosed": true
+      }
+    ]
+  }
+}

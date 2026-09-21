@@ -5,7 +5,8 @@ Summarizes tiers confirmed/overridden and illustrative relative-unit estimates
 from ~/.auto-model-router/logs/usage.jsonl (or a project .auto-model-router/usage.jsonl).
 
 Honest scope: this is a local log summary only. It does not read Cursor, Claude
-Code, Codex, or any vendor billing/token API. Rates are example relative units.
+Code, Codex, or any vendor billing/token API. cost_usd and token counts are
+used when the log has them; otherwise the report labels illustrative relative units.
 """
 
 from __future__ import annotations
@@ -20,8 +21,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-TIERS = ("fast", "standard", "reasoning", "max")
-EXAMPLE_RATES = {"fast": 1.0, "standard": 3.0, "reasoning": 8.0, "max": 20.0}
+HERE = Path(__file__).resolve()
+for _base in (HERE.parent, *HERE.parents):
+    if (_base / "auto_model_router.py").is_file():
+        if str(_base) not in sys.path:
+            sys.path.insert(0, str(_base))
+        break
+
+from auto_model_router import TIERS, summarize_usage  # noqa: E402
 
 DEFAULT_CONFIG = {
     "openDashboardOnApply": True,
@@ -134,44 +141,15 @@ def filter_window(
 
 
 def summarize(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    by_tier = Counter()
-    confirmed = 0
-    overridden = 0
-    routed = 0.0
+    summary = summarize_usage(entries)
     hosts: Counter = Counter()
     for item in entries:
         tier = str(item.get("tier", "")).strip().lower()
-        if tier not in TIERS:
-            continue
-        by_tier[tier] += 1
-        routed += EXAMPLE_RATES[tier]
-        if item.get("confirmed") in (True, "true", "True", 1, "1", "yes"):
-            confirmed += 1
-        if item.get("overridden") in (True, "true", "True", 1, "1", "yes"):
-            overridden += 1
         host = item.get("host")
-        if host:
+        if tier in TIERS and host:
             hosts[str(host)] += 1
-    count = sum(by_tier.values())
-    always_reasoning = count * EXAMPLE_RATES["reasoning"]
-    always_max = count * EXAMPLE_RATES["max"]
-
-    def pct_saved(baseline: float, value: float) -> float:
-        if baseline <= 0:
-            return 0.0
-        return round((baseline - value) / baseline * 100, 1)
-
-    return {
-        "task_count": count,
-        "tasks_by_tier": {t: by_tier.get(t, 0) for t in TIERS},
-        "confirmed_count": confirmed,
-        "override_count": overridden,
-        "override_rate_pct": round(overridden / count * 100, 1) if count else 0.0,
-        "hosts": dict(hosts),
-        "routed_relative_units": round(routed, 2),
-        "estimated_savings_vs_always_reasoning_pct": pct_saved(always_reasoning, routed),
-        "estimated_savings_vs_always_max_pct": pct_saved(always_max, routed),
-    }
+    summary["hosts"] = dict(hosts)
+    return summary
 
 
 def human_report(
@@ -196,7 +174,8 @@ def human_report(
         f"Log: {log_path}",
         "",
         "Honest scope: local usage log only. Not live Cursor/Claude/Codex billing.",
-        "Rates below are illustrative relative units, not vendor prices.",
+        "Dollar figures appear only when a log row includes cost_usd.",
+        "This review does not apply a price table. Tier-only rows stay on labeled illustrative relative units.",
         "",
     ]
     if used_sample:
@@ -217,10 +196,22 @@ def human_report(
         f"Decisions in window: {summary['task_count']} ({counts})",
         f"Confirmed: {summary['confirmed_count']}  |  Overrides: {summary['override_count']} "
         f"({summary['override_rate_pct']}%)",
-        f"Routed usage: {summary['routed_relative_units']:.1f} relative units",
-        f"Est. savings vs always-reasoning: {summary['estimated_savings_vs_always_reasoning_pct']:.1f}%",
-        f"Est. savings vs always-max: {summary['estimated_savings_vs_always_max_pct']:.1f}%",
+        f"Tokens logged: input={summary['input_tokens']} output={summary['output_tokens']}",
     ])
+    if summary.get("measured_cost_usd") is not None:
+        lines.append(f"Measured cost: ${summary['measured_cost_usd']:.6f}")
+    else:
+        lines.append("Measured cost: none")
+    illustrative = summary.get("illustrative")
+    if illustrative:
+        lines.extend([
+            f"Illustrative fallback: {illustrative['routed_relative_units']:.1f} relative units "
+            f"({illustrative['entries']} tier-only row(s); not vendor prices)",
+            f"Est. savings vs always-reasoning (illustrative rows only): "
+            f"{illustrative['estimated_savings_vs_always_reasoning_pct']:.1f}%",
+            f"Est. savings vs always-max (illustrative rows only): "
+            f"{illustrative['estimated_savings_vs_always_max_pct']:.1f}%",
+        ])
     if summary["hosts"]:
         host_bits = ", ".join(f"{h}={n}" for h, n in sorted(summary["hosts"].items()))
         lines.append(f"Hosts (when logged): {host_bits}")
@@ -342,7 +333,7 @@ def main(argv: List[str]) -> int:
             "used_sample": used_sample,
             "missing_timestamp_count": len(missing),
             "summary": summary,
-            "rates_are": "illustrative relative example units, not vendor prices",
+            "rates_are": summary.get("rates_are"),
             "billing_api_accessed": False,
         }
         print("--- JSON ---")

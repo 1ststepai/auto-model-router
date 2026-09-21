@@ -39,6 +39,10 @@ An optional always-apply `.cursor/rules/auto-model-router.mdc` can point at the 
 
 Cursor's model names change over time, so keep the mapping local to the project's available picker rather than hard-coding vendor names in the skill.
 
+## Hard confirm gate
+
+Copy [`hooks/cursor.hooks.json`](../hooks/cursor.hooks.json) to `.cursor/hooks.json` in the project (or merge it into `~/.cursor/hooks.json`). The `preToolUse` command is `python3 scripts/confirm_gate.py` with `failClosed: true`. That denies tool calls until the user confirms a spendy tier. [`.cursor/rules/auto-model-router.mdc`](../.cursor/rules/auto-model-router.mdc) only reminds the agent; it does not block. A committed `.cursor/hooks.json` also loads for cloud agents — copy it on purpose; this repo does not enable it for you.
+
 ## Verify
 
 Start a new Agent chat (or restart Cursor after a user-wide install), ask for a moderate task without naming a model, and confirm that the `Auto suggests <tier> — <reason>...` line appears before edits. Reply `confirm` or override the tier. Cursor's native Auto picker is separate and may still choose silently.

@@ -32,6 +32,10 @@ For a user-wide copy, use `~/.claude/skills/auto-model-router/SKILL.md` on macOS
 
 Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project.
 
+## Hard confirm gate
+
+Merge [`hooks/claude.settings.snippet.json`](../hooks/claude.settings.snippet.json) into `.claude/settings.json` or `~/.claude/settings.json`. `PreToolUse` runs `python3 scripts/confirm_gate.py`. Exit code 2 blocks the tool call, including when the model puts `confirmed: true` in the tool arguments. `UserPromptSubmit` is what records the user's `confirm` or tier override.
+
 ## Verify
 
 Start a new Claude Code session after installing. Ask for a moderate task without choosing a model or effort, and check for the `Auto suggests <tier> — <reason>...` line before file changes. Reply `confirm` or override explicitly. Project files are the dependable choice for cloud sessions; a local `~/.claude` copy does not automatically follow a remote checkout.

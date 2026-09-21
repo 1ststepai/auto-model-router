@@ -15,6 +15,7 @@
     .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .7rem; margin: 1rem 0; }
     .card { border: 1px solid #8886; border-radius: .6rem; padding: .8rem; }
     .value { display: block; font-size: 1.55rem; font-weight: 750; }
+    #basis { font-size: 1rem; word-break: break-word; }
     .chart { display: grid; gap: .65rem; margin: 1rem 0 2rem; max-width: 700px; }
     .row { display: grid; grid-template-columns: 95px 1fr 70px; align-items: center; gap: .6rem; }
     .track { height: 1.1rem; background: #8884; border-radius: .4rem; overflow: hidden; }
@@ -28,13 +29,14 @@
 <body>
   <main>
     <h1>Auto Model Router savings estimator</h1>
-    <p class="banner">Estimates from your routing log, not live Cursor/Claude billing.</p>
-    <p>This uses example relative rates: <code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>. Percentages are estimates from the supplied local routing log, not measured vendor savings. It never accesses credentials, GUI state, tokens, or vendor billing APIs.</p>
+    <p class="banner">Local log only. Dollars are shown only when a row has <code>cost_usd</code> or you fill a price table. Tier-only rows are labeled illustrative, not vendor billing.</p>
+    <p>Optional log fields: <code>input_tokens</code>, <code>output_tokens</code>, <code>cost_usd</code>, <code>currency</code>. This page never scrapes Cursor, Claude, or Codex. If you only stored a tier, the fallback rates are example units (<code>fast=1x</code>, <code>standard=3x</code>, <code>reasoning=8x</code>, <code>max=20x</code>), clearly marked — not prices. To turn token counts into dollars, copy <code>demo/prices.example.json</code>, fill the per-million rates yourself, and use <code>demo/savings_estimator.py --prices</code>. This repo does not ship vendor rates.</p>
     <p class="muted">Use this alongside context tools such as <strong>lean.ctx</strong> or <strong>ponytail</strong>: those reduce context sent, while this router addresses model-tier overkill. It can help slow usage burn only when a confirmed lighter tier maps to a cheaper/faster model or lower effort and actually runs. No affiliation is implied, and no savings are guaranteed.</p>
 
     <h2>Load a routing log</h2>
     <p>Load the included sample, choose a JSON file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and <code>timestamp</code>.</p>
     <button id="sample">Load sample log</button>
+    <button id="measured">Load measured sample</button>
     <input id="file" type="file" accept="application/json,.json">
     <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>
     <br><button id="calculate">Calculate estimates</button>
@@ -44,6 +46,9 @@
       <h2>Estimate</h2>
       <div class="cards">
         <div class="card">Tasks<span id="tasks" class="value">—</span></div>
+        <div class="card">Basis<span id="basis" class="value">—</span></div>
+        <div class="card">Logged tokens<span id="tokens" class="value">—</span></div>
+        <div class="card">Measured USD<span id="dollars" class="value">—</span></div>
         <div class="card">Vs always-reasoning<span id="reasoning-saved" class="value">—</span></div>
         <div class="card">Vs always-max<span id="max-saved" class="value">—</span></div>
         <div class="card">Override rate<span id="override" class="value">—</span></div>
@@ -168,41 +173,68 @@ function calculate(payload) {
   const rows = entries(payload);
   if (!rows.length) throw new Error("The routing log is empty");
   const counts = Object.fromEntries(TIERS.map(t => [t, 0]));
-  let units = 0, overrides = 0;
+  let units = 0, overrides = 0, priced = 0, illustrative = 0;
+  let inputTokens = 0, outputTokens = 0, cost = 0;
   rows.forEach((row, i) => {
     if (!row || !TIERS.includes(row.tier)) throw new Error(`Entry ${i + 1} has an invalid tier`);
     counts[row.tier]++;
-    units += RATES[row.tier];
     if (row.overridden === true) overrides++;
+    const inn = Number(row.input_tokens);
+    const out = Number(row.output_tokens);
+    if (Number.isFinite(inn)) inputTokens += inn;
+    if (Number.isFinite(out)) outputTokens += out;
+    const logged = Number(row.cost_usd);
+    if (row.cost_usd != null && row.cost_usd !== "" && Number.isFinite(logged)) {
+      cost += logged;
+      priced++;
+    } else {
+      units += RATES[row.tier];
+      illustrative++;
+    }
   });
-  const alwaysReasoning = rows.length * RATES.reasoning;
-  const alwaysMax = rows.length * RATES.max;
-  const pct = base => Math.round((base - units) / base * 1000) / 10;
+  const alwaysReasoning = illustrative * RATES.reasoning;
+  const alwaysMax = illustrative * RATES.max;
+  const pct = base => base ? Math.round((base - units) / base * 1000) / 10 : null;
+  let basis = "illustrative_tier_rates";
+  if (priced && illustrative) basis = "mixed";
+  else if (priced) basis = "measured";
   return {
-    rates_are: "illustrative relative example units, not vendor prices",
-    example_rates: RATES,
+    basis,
+    rates_are: illustrative
+      ? "illustrative relative example units, not vendor prices"
+      : "measured cost_usd from the local log, not a vendor billing API",
+    example_rates: illustrative ? RATES : null,
     task_count: rows.length,
     tasks_by_tier: counts,
     override_count: overrides,
     override_rate_pct: Math.round(overrides / rows.length * 1000) / 10,
-    routed_relative_units: units,
-    always_reasoning_relative_units: alwaysReasoning,
-    always_max_relative_units: alwaysMax,
-    estimated_savings_vs_always_reasoning_pct: pct(alwaysReasoning),
-    estimated_savings_vs_always_max_pct: pct(alwaysMax)
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    priced_entry_count: priced,
+    illustrative_entry_count: illustrative,
+    measured_cost_usd: priced ? Math.round(cost * 1e6) / 1e6 : null,
+    routed_relative_units: illustrative ? units : null,
+    estimated_savings_vs_always_reasoning_pct: illustrative ? pct(alwaysReasoning) : null,
+    estimated_savings_vs_always_max_pct: illustrative ? pct(alwaysMax) : null,
+    note: illustrative
+      ? "Savings percents cover tier-only rows using example relative units. They are not dollars."
+      : "Every row had cost_usd. No illustrative rate was applied."
   };
 }
 function render(payload) {
   const result = calculate(payload);
   $("results").hidden = false;
   $("tasks").textContent = result.task_count;
-  $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct + "%";
-  $("max-saved").textContent = result.estimated_savings_vs_always_max_pct + "%";
+  $("basis").textContent = result.basis;
+  $("tokens").textContent = (result.input_tokens + result.output_tokens) ? (result.input_tokens + " / " + result.output_tokens) : "—";
+  $("dollars").textContent = result.measured_cost_usd == null ? "—" : ("$" + result.measured_cost_usd);
+  $("reasoning-saved").textContent = result.estimated_savings_vs_always_reasoning_pct == null ? "n/a" : result.estimated_savings_vs_always_reasoning_pct + "%";
+  $("max-saved").textContent = result.estimated_savings_vs_always_max_pct == null ? "n/a" : result.estimated_savings_vs_always_max_pct + "%";
   $("override").textContent = result.override_rate_pct + "%";
   const maxCount = Math.max(...Object.values(result.tasks_by_tier), 1);
   $("chart").innerHTML = TIERS.map(t => `<div class="row"><strong>${t}</strong><div class="track"><div class="bar ${t}" style="width:${result.tasks_by_tier[t] / maxCount * 100}%"></div></div><span>${result.tasks_by_tier[t]}</span></div>`).join("");
   $("json").textContent = JSON.stringify(result, null, 2);
-  $("status").textContent = " Loaded successfully.";
+  $("status").textContent = " Loaded successfully. " + result.note;
 }
 function loadText(text) {
   try { render(JSON.parse(text)); }
@@ -222,6 +254,18 @@ $("sample").addEventListener("click", async () => {
   }
 });
 $("calculate").addEventListener("click", () => loadText($("input").value));
+$("measured").addEventListener("click", async () => {
+  try {
+    const response = await fetch("sample_measured_usage.jsonl");
+    if (!response.ok) throw new Error("measured sample unavailable");
+    const text = await response.text();
+    const rows = text.split("\n").map(line => line.trim()).filter(Boolean).map(line => JSON.parse(line));
+    $("input").value = JSON.stringify(rows, null, 2);
+    render(rows);
+  } catch (error) {
+    $("status").textContent = " Error: " + error.message;
+  }
+});
 $("file").addEventListener("change", event => {
   const file = event.target.files[0];
   if (!file) return;

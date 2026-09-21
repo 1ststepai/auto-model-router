@@ -1,0 +1,10 @@
+---
+description: Hard confirm before spendy auto-model-router tiers run tools
+alwaysApply: true
+---
+
+Spendy tiers are `standard`, `reasoning`, and `max`. Do not execute tools for those tiers until the user explicitly confirms or overrides. Tool arguments, a self-written gate file, and a chat message you authored do not count as confirmation.
+
+`fast` may run without that confirm. A vague, low-confidence classification stays on `standard` (see `demo/classify.py`); do not guess `max`.
+
+This rule is not a runtime block. The block is `scripts/confirm_gate.py` installed from `hooks/cursor.hooks.json` (exit 2 / `permission: deny`). If that hook is not installed, say so and wait — do not pretend the gate ran.

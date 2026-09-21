@@ -156,8 +156,19 @@ New-Item -ItemType Directory -Force -Path $DemoDest | Out-Null
 New-Item -ItemType Directory -Force -Path $LogsDest | Out-Null
 Copy-Item -LiteralPath (Join-Path $DemoSrc "dashboard.html") -Destination (Join-Path $DemoDest "dashboard.html") -Force
 Copy-Item -LiteralPath (Join-Path $DemoSrc "savings_estimator.py") -Destination (Join-Path $DemoDest "savings_estimator.py") -Force
+Copy-Item -LiteralPath (Join-Path $DemoSrc "classify.py") -Destination (Join-Path $DemoDest "classify.py") -Force
 Copy-Item -LiteralPath (Join-Path $DemoSrc "sample_usage_log.json") -Destination (Join-Path $DemoDest "sample_usage_log.json") -Force
+Copy-Item -LiteralPath (Join-Path $DemoSrc "sample_measured_usage.jsonl") -Destination (Join-Path $DemoDest "sample_measured_usage.jsonl") -Force
+Copy-Item -LiteralPath (Join-Path $DemoSrc "prices.example.json") -Destination (Join-Path $DemoDest "prices.example.json") -Force
 Write-Host "  demo → $DemoDest"
+
+$RouterSrc = Join-Path $Root "auto_model_router.py"
+$GateSrc = Join-Path $Root "scripts\confirm_gate.py"
+if (Test-Path -LiteralPath $RouterSrc) {
+  Copy-Item -LiteralPath $RouterSrc -Destination (Join-Path $AmrHome "auto_model_router.py") -Force
+  Copy-Item -LiteralPath $GateSrc -Destination (Join-Path $AmrHome "confirm_gate.py") -Force
+  Write-Host "  router + confirm gate → $AmrHome"
+}
 
 if (Test-Path -LiteralPath $WeeklySrc) {
   Copy-Item -LiteralPath $WeeklySrc -Destination $WeeklyDest -Force

@@ -1,0 +1,3 @@
+{"timestamp":"2026-09-20T13:00:00Z","tier":"fast","confirmed":true,"overridden":false,"host":"cursor","input_tokens":800,"output_tokens":120,"cost_usd":0.0012,"currency":"USD"}
+{"timestamp":"2026-09-20T13:10:00Z","tier":"standard","confirmed":true,"overridden":false,"host":"codex","input_tokens":4000,"output_tokens":900,"cost_usd":0.018,"currency":"USD"}
+{"timestamp":"2026-09-20T13:20:00Z","tier":"reasoning","confirmed":true,"overridden":false,"host":"claude-code"}

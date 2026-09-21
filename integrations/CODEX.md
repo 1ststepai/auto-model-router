@@ -31,6 +31,10 @@ Some older/configured installs also support `$CODEX_HOME/skills` (normally `~/.c
 
 Tier labels are deliberately not Codex product names. Keep the mapping in project instructions so it can evolve with the available Codex models.
 
+## Hard confirm gate
+
+Skill text in `AGENTS.md` is not enough — Codex can skip it. Copy [`hooks/codex.hooks.json`](../hooks/codex.hooks.json) to `.codex/hooks.json` (project) or `~/.codex/hooks.json`, then run `/hooks` and trust the command. `PreToolUse` denies local shell, `apply_patch`, MCP, and other local function tools until the user confirms a spendy tier. Hosted tools such as web search are not on that hook path, so this cannot block them.
+
 ## Verify
 
 Start a new Codex run/session after changing `AGENTS.md` or adding a skill. Ask for a moderate task without selecting a model or reasoning effort. Before editing, Codex should show the `Auto suggests <tier> — <reason>...` line and wait for `confirm` or an explicit override. Put the files in the repository for cloud/background runs.

@@ -3,7 +3,9 @@
 Model Router Prototype — task classifier CLI
 =============================================
 Heuristic rubric (NOT ML). Demonstrates provider-agnostic Auto routing: pick the lightest model/effort
-that still does the job well.
+that still does the job well. Each result includes confidence (0–1). A vague prompt
+below LOW_CONFIDENCE (0.55) is downshifted to standard — never guessed as max —
+and needs_confirm is true for every non-fast tier.
 
 Tiers (capability labels; not vendor product names)
 ----------------------------------------------------------------------
@@ -81,6 +83,9 @@ MAX_PATTERNS: List[Tuple[str, str]] = [
 WORD_COUNT_REASONING = 80
 WORD_COUNT_MAX = 200
 
+# Below this, a vague prompt must not be guessed upward (especially not max).
+LOW_CONFIDENCE = 0.55
+
 # Aliases for documentation / older labels
 ALIAS_TO_TIER = {
     "low": "fast",
@@ -99,6 +104,48 @@ def _match_signals(text: str, patterns: List[Tuple[str, str]]) -> List[str]:
     return found
 
 
+def _finalize(
+    tier: str,
+    reason: str,
+    signals: List[str],
+    conf: float,
+    *,
+    vague: bool,
+    guessed_max: bool,
+) -> dict:
+    """Vague, low-confidence prompts default to standard — never a guessed max."""
+    downshifted_from = None
+    low = conf < LOW_CONFIDENCE
+    signals = list(signals)
+    if tier == "max" and low:
+        guessed_max = True
+    if guessed_max or (vague and low and tier != "standard"):
+        downshifted_from = "max" if guessed_max or tier == "max" else tier
+        if tier != "standard":
+            tier = "standard"
+        if downshifted_from == "max":
+            reason = (
+                "Low confidence on a vague prompt; defaulting to standard "
+                "instead of guessing max. Explicit confirmation required."
+            )
+        else:
+            reason = (
+                "Low confidence on a vague prompt; defaulting to standard "
+                "instead of guessing. Explicit confirmation required."
+            )
+        signals.append("low confidence downshift → standard")
+    if not signals:
+        signals = ["no patterned signals"]
+    return {
+        "tier": tier,
+        "reason": reason,
+        "signals": signals,
+        "confidence": round(conf, 2),
+        "needs_confirm": tier != "fast",
+        "downshifted_from": downshifted_from,
+    }
+
+
 def classify(task: str) -> dict:
     """Return tier / reason / signals / confidence for a task description."""
     task = (task or "").strip()
@@ -108,6 +155,8 @@ def classify(task: str) -> dict:
             "reason": "Empty task; defaulting to lightest tier.",
             "signals": ["empty input"],
             "confidence": 0.3,
+            "needs_confirm": False,
+            "downshifted_from": None,
         }
 
     words = len(task.split())
@@ -117,10 +166,10 @@ def classify(task: str) -> dict:
     max_s = _match_signals(task, MAX_PATTERNS)
 
     signals: List[str] = []
+    # Length alone used to force max. Only a vague brief (no tier patterns) counts as that guess.
+    guessed_max = words >= WORD_COUNT_MAX and not (fast_s or std_s or reason_s or max_s)
     if words >= WORD_COUNT_MAX:
         signals.append(f"very long prompt ({words} words)")
-        if "long ambiguous brief" not in max_s:
-            max_s = max_s + ["long ambiguous brief"]
     elif words >= WORD_COUNT_REASONING:
         signals.append(f"long prompt ({words} words)")
         if not reason_s and not max_s and not std_s:
@@ -221,15 +270,10 @@ def classify(task: str) -> dict:
             conf = 0.5
             signals.append("no strong signals; default standard")
 
-    if not signals:
-        signals = ["no patterned signals"]
-
-    return {
-        "tier": tier,
-        "reason": reason,
-        "signals": signals,
-        "confidence": round(conf, 2),
-    }
+    vague = not (fast_s or std_s or reason_s or max_s)
+    return _finalize(
+        tier, reason, signals, conf, vague=vague, guessed_max=guessed_max
+    )
 
 
 EXAMPLES: List[Tuple[str, str]] = [
@@ -257,8 +301,14 @@ def suggest_line(task: str, result=None) -> str:
     short_why = why
     if len(short_why) > 120:
         short_why = short_why[:117].rsplit(" ", 1)[0] + "…"
+    note = ""
+    if result.get("downshifted_from"):
+        note = (
+            f" Confidence {result['confidence']} is low, so this is standard "
+            f"rather than {result['downshifted_from']}."
+        )
     return (
-        f"Auto suggests **{tier}** — {short_why}. "
+        f"Auto suggests **{tier}** — {short_why}.{note} "
         "Confirm to run, or override (fast | standard | reasoning | max)."
     )
 

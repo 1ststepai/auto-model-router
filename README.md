@@ -106,15 +106,21 @@ Auto suggests **standard** — Multi-file edits, known patterns, or moderate deb
 
 ## Savings estimator
 
-If you are running out of Cursor, Claude Code, or Codex usage, this project addresses the **model-overkill** part of the burn: it suggests the lightest tier that can do the job and asks for confirmation before substantial work. It can help slow usage burn **only when** the confirmed lighter tier is mapped to a cheaper/faster model or lower effort and that choice is what actually runs. The included estimator uses illustrative relative rates (`fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`) to compare your local routed log with always-reasoning and always-max baselines:
+If you are running out of Cursor, Claude Code, or Codex usage, this project addresses the **model-overkill** part of the burn: it suggests the lightest tier that can do the job and asks for confirmation before substantial work. It can help slow usage burn **only when** the confirmed lighter tier is mapped to a cheaper/faster model or lower effort and that choice is what actually runs.
+
+The estimator prefers numbers the host already wrote into the local log: `input_tokens`, `output_tokens`, and `cost_usd`. It does not scrape billing dashboards or call a vendor API. Rows that only have a tier fall back to illustrative relative rates (`fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`), and that fallback is labeled. Those rates are not prices. To turn token counts into dollars when `cost_usd` is absent, copy [`demo/prices.example.json`](demo/prices.example.json), fill `input_per_million` and `output_per_million` yourself, and pass `--prices`. Empty rates stay unpriced — this repo does not invent them.
 
 ```bash
 python3 demo/savings_estimator.py demo/sample_usage_log.json
-# Or run ./scripts/apply.sh (opens ~/.auto-model-router/demo/dashboard.html), then Load sample log.
-# Optional: open demo/dashboard.html from the repo and load the sample log or paste your own JSON.
+python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
+# python3 demo/savings_estimator.py .auto-model-router/usage.jsonl --prices /path/to/your-prices.json
 ```
 
-This is not live billing or token accounting: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. Percentages are estimates from the supplied local log, not promises or measured vendor savings. After confirmed runs, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`INSTALL.md`](INSTALL.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
+The sample log is tier-only (illustrative). `demo/sample_measured_usage.jsonl` mixes logged `cost_usd` with one tier-only row so the fallback stays visible. Open `demo/dashboard.html` and use **Load sample log** or **Load measured sample**.
+
+Spendy tiers (`standard`, `reasoning`, `max`) do not get a hard block from the skill text. Install [`scripts/confirm_gate.py`](scripts/confirm_gate.py) as a pre-tool hook or call [`route`](auto_model_router.py). See [INSTALL.md](INSTALL.md). A vague, low-confidence prompt classifies as `standard` and still needs that confirm; it is not guessed as `max`.
+
+This is not live billing. After a confirmed run, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`, including token and `cost_usd` fields when the host already has them. Do not invent those numbers. See [`SKILL.md`](SKILL.md). Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
 
 ## Supported hosts
 
@@ -124,6 +130,28 @@ This is not live billing or token accounting: coding-agent GUIs do not expose a 
 - Any agent with custom instructions or a skills directory
 
 Cloud/background agents should use the committed project copy, not only a local user-home skill.
+
+## CodeFriends
+
+Optional. Nothing in this repo imports CodeFriends. Agents that want the same policy and the same `usage.jsonl` call `route`:
+
+```python
+from auto_model_router import route
+
+result = route(
+    task,
+    confirmed=True,  # boolean True only after an explicit user confirm
+    override=None,   # or "fast" | "standard" | "reasoning" | "max"
+    host="codefriends",
+    log_path=".auto-model-router/usage.jsonl",
+    usage={"input_tokens": 100, "output_tokens": 20, "cost_usd": 0.002, "currency": "USD"},
+)
+if not result["allowed"]:
+    # show result["suggestion"]; do not run tools
+    ...
+```
+
+`confirmed="true"` (a string) does not count. Omit `usage` when you do not have real token or dollar figures. `result["allowed"]` is false for `standard`, `reasoning`, and `max` until that confirm or an `override`.
 
 ## How you'll know it works
 
@@ -162,7 +190,7 @@ Tools such as **lean.ctx** and **ponytail** address a complementary waste: they 
 5. Run with the chosen provider/model/effort mapping.
 6. Escalate after a clearly insufficient or failed light attempt, and say so once.
 
-An explicit user model or effort choice always wins. Hosts that cannot pause for confirmation should present the suggestion and treat the user's next instruction as the confirmation or override; they should not silently dispatch a surprising choice.
+An explicit user model or effort choice always wins. A host that cannot install a pre-tool hook cannot hard-block tool execution; it can only show the suggestion. Do not treat the next chat line as a block unless `scripts/confirm_gate.py` is actually installed.
 
 ## Tier rubric
 
@@ -188,7 +216,7 @@ python3 demo/classify.py --suggest "Debug intermittent auth failures"
 echo "Debug intermittent auth failures" | python3 demo/classify.py
 ```
 
-`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `reason`, `signals`, and `confidence`.
+`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `reason`, `signals`, `confidence`, `needs_confirm`, and `downshifted_from`. Confidence below 0.55 on a vague prompt downshifts to `standard` instead of guessing `max`.
 
 ## Honest scope
 
@@ -214,14 +242,19 @@ assets/auto-model-router-logo.png     # original neon upload
 SKILL.md                              # compatibility copy of the canonical skill
 skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
 scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
+scripts/confirm_gate.py                # pre-tool hook: exit 2 blocks spendy runs
 scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
+auto_model_router.py                   # shared route() API (optional CodeFriends hook)
+hooks/                                 # Cursor, Claude, and Codex hook snippets
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md
-demo/classify.py                       # offline heuristic checker
-demo/savings_estimator.py              # relative usage estimator
-demo/sample_usage_log.json             # fake demo routing log
+demo/classify.py                       # offline heuristic checker (confidence + downshift)
+demo/savings_estimator.py              # local tokens/cost, else labeled relative units
+demo/prices.example.json               # empty price table — you fill rates
+demo/sample_usage_log.json             # fake tier-only routing log
+demo/sample_measured_usage.jsonl       # sample with cost_usd plus one tier-only row
 demo/dashboard.html                    # no-build local dashboard
 examples.md
 CONTRIBUTING.md
