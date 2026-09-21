@@ -1,0 +1,28 @@
+{
+  "comment": "Merge into .gemini/settings.json. Gemini CLI uses BeforeAgent / BeforeTool, not PreToolUse. Same confirm_gate.py as Cursor/Claude/Codex — spendy tools stay blocked until a real user confirm. Trust project hooks. Not a Google billing API.",
+  "hooks": {
+    "BeforeAgent": [
+      {
+        "hooks": [
+          {
+            "name": "auto-model-router-prompt",
+            "type": "command",
+            "command": "python3 scripts/confirm_gate.py"
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "name": "auto-model-router-gate",
+            "type": "command",
+            "command": "python3 scripts/confirm_gate.py"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -151,6 +151,12 @@ def validate_apply_scripts() -> None:
         encoding="utf-8"
     ):
         error("scripts/apply.ps1 no longer points at skills\\auto-model-router\\SKILL.md")
+    sh_text = sh.read_text(encoding="utf-8") if sh.is_file() else ""
+    ps_text = ps.read_text(encoding="utf-8") if ps.is_file() else ""
+    if ".gemini/skills/auto-model-router" not in sh_text:
+        error("scripts/apply.sh no longer copies the skill to ~/.gemini/skills/auto-model-router")
+    if r".gemini\skills\auto-model-router" not in ps_text:
+        error("scripts/apply.ps1 no longer copies the skill to %USERPROFILE%\\.gemini\\skills\\auto-model-router")
 
 
 def validate_agent_plugins() -> dict:

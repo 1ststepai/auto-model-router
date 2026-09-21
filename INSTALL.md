@@ -2,13 +2,13 @@
 
 This repository is an agent behavior skill. Install it as a **plugin** from this GitHub repo (preferred when your host supports marketplace install) or copy the skill with the apply script. When you want the policy on every request, add the optional host rule or instruction file described below.
 
-Plugin or skill install loads the suggest → confirm policy. It does **not** change Cursor, Claude Code, or Codex billing APIs, and it does **not** guarantee savings.
+Plugin or skill install loads the boundary-gated suggest → confirm policy. It does **not** change Cursor, Claude Code, Codex, or Gemini billing APIs, and it does **not** guarantee savings. GitHub plugin install works for Cursor, Claude Code, and Codex. Official Cursor Marketplace and Anthropic catalog listings are pending. **Gemini has no official Google plugin catalog** — use the skill-copy path (or `gemini skills install --path`); this repo does not fake a marketplace.
 
 ## Install as a plugin
 
 This repo is its own plugin package. The canonical skill stays at [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). Host manifests point at that path — there is no second skill body.
 
-These steps install from **this GitHub repository** (or a local clone). They are not an official listing on Cursor’s public Marketplace or Anthropic’s official plugin catalogs.
+These steps install from **this GitHub repository** (or a local clone). They are not an official listing on Cursor’s public Marketplace, Anthropic’s official plugin catalogs, or any Google plugin catalog.
 
 A plugin install does **not** open the savings dashboard. Use the [apply script](#recommended-apply-script-dashboard-auto-starts) (or open `demo/dashboard.html`) when you want the local estimator UI.
 
@@ -75,9 +75,30 @@ codex plugin add auto-model-router@auto-model-router
 
 **Skill-only fallback:** `./scripts/apply.sh --no-open`, or copy the skill into `.agents/skills/auto-model-router/` and/or add a marked section to `AGENTS.md`.
 
+### Gemini
+
+Google does not currently offer a plugin catalog this repository can list in. There is **no** `.gemini-plugin` marketplace in this repo. Do not treat `gemini skills install` as an official listing.
+
+**Skill copy (honest install path):**
+
+```bash
+./scripts/apply.sh --no-open
+# or project copy:
+mkdir -p .gemini/skills/auto-model-router
+cp skills/auto-model-router/SKILL.md .gemini/skills/auto-model-router/SKILL.md
+```
+
+Optional Gemini CLI helper (still a git/path copy, not a Google marketplace):
+
+```bash
+gemini skills install https://github.com/1ststepai/auto-model-router.git --path skills/auto-model-router
+```
+
+If `gemini skills` is missing or flags differ, use `cp`. Full notes: [`integrations/GEMINI.md`](integrations/GEMINI.md).
+
 ## Recommended: apply script (dashboard auto-starts)
 
-**"Apply" means run the script below** — not only dropping `SKILL.md` into a skills folder. Cursor/Claude loading a skill cannot open a GUI; the apply scripts copy the skill, install the demo under `~/.auto-model-router/demo` (Windows: `%USERPROFILE%\.auto-model-router\demo`), create an empty `logs/usage.jsonl`, and by default **open `dashboard.html` in your default browser**.
+**"Apply" means run the script below** — not only dropping `SKILL.md` into a skills folder. Cursor/Claude/Gemini loading a skill cannot open a GUI; the apply scripts copy the skill, install the demo under `~/.auto-model-router/demo` (Windows: `%USERPROFILE%\.auto-model-router\demo`), create an empty `logs/usage.jsonl`, and by default **open `dashboard.html` in your default browser**.
 
 From a clone of this repository:
 
@@ -104,11 +125,11 @@ From a clone of this repository:
 - `--no-open` / `-NoOpen` sets `openDashboardOnApply` to `false` (persisted). `--open` / `-Open` sets it back to `true`. Default when missing is open (`true`).
 - Weekly review is **off by default** (opt-in). See [Optional weekly review](#optional-weekly-review) below.
 
-After it opens, click **Load sample log** for illustrative estimates (not live Cursor/Claude/Codex billing). Manual `cp` of `SKILL.md` alone does **not** auto-start the dashboard.
+After it opens, click **Load sample log** for illustrative estimates (not live Cursor/Claude/Codex/Gemini billing). Manual `cp` of `SKILL.md` alone does **not** auto-start the dashboard.
 
 ## Optional weekly review
 
-Weekly reviews summarize your **local** `~/.auto-model-router/logs/usage.jsonl` (tiers confirmed/overridden, counts, illustrative relative-unit estimates). They do **not** read Cursor, Claude Code, Codex, or any vendor billing/token API.
+Weekly reviews summarize your **local** `~/.auto-model-router/logs/usage.jsonl` (tiers confirmed/overridden, counts, illustrative relative-unit estimates). They do **not** read Cursor, Claude Code, Codex, Gemini, or any vendor billing/token API.
 
 ```bash
 # Enable / disable (persists weeklyReview in config.json)
@@ -147,13 +168,14 @@ To run truly weekly without thinking about it, use your OS scheduler — **nothi
 - **Cursor Agent**, using project or user skills and optional Cursor rules.
 - **Claude Code**, using project or personal skills and `CLAUDE.md` instructions.
 - **Codex**, using `AGENTS.md` and, where enabled, a skills directory.
+- **Gemini**, using Gemini CLI skills (`.gemini/skills/` or `gemini skills install --path`), `GEMINI.md`, Google AI Studio / Antigravity custom instructions, and an optional `BeforeTool` hook. No Google plugin catalog.
 - **Any coding agent** that accepts custom instructions, project instructions, or Agent Skills. Copy or paste the policy, then map `fast`, `standard`, `reasoning`, and `max` to that host's models or effort controls.
 
 ## What this does not do
 
-This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier suggestion, waits for confirmation or an override, and then uses the host's model picker or effort setting. A host's native Auto mode can still make its own choice unless you change that host setting.
+This does **not** replace or configure Cursor's built-in **Auto** model picker by itself. It is agent behavior instructions: the agent assesses the task, shows a tier suggestion, auto-continues only clear reversible `fast` work, and waits for confirmation on spendy or high-risk work. A host's native Auto mode can still make its own choice unless you change that host setting. An optional hook can hard-block spendy tool calls; a skill or rule cannot.
 
-If you are running out of usage or burning tokens, this targets **model overkill**: suggest a lighter tier when it is sufficient, then confirm before substantial work. It can help slow usage burn only when that confirmed tier is mapped to a cheaper/faster model or lower effort and that option actually runs. Tools such as **lean.ctx** and **ponytail** are complementary peers—not competitors and not affiliated with this project—that reduce how much context you send; this skill does not shrink context or guarantee savings. Together they form a usage-discipline stack, not a promise of measured Cursor/Claude/Codex quota reduction.
+If you are running out of usage or burning tokens, this targets **model overkill**: suggest a lighter tier when it is sufficient, auto-continue clear reversible `fast` work, then confirm before spendy or high-risk work. It can help slow usage burn only when that authorized tier is mapped to a cheaper/faster model or lower effort and that option actually runs. Tools such as **lean.ctx** and **ponytail** are complementary peers—not competitors and not affiliated with this project—that reduce how much context you send; this skill does not shrink context or guarantee savings. Together they form a usage-discipline stack, not a promise of measured Cursor/Claude/Codex/Gemini quota reduction.
 
 ## Quick start (about 60 seconds)
 
@@ -171,15 +193,21 @@ cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .claude/skills/a
 # Codex (if your setup supports Agent Skills)
 mkdir -p .agents/skills/auto-model-router
 cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .agents/skills/auto-model-router/SKILL.md
+
+# Gemini CLI
+mkdir -p .gemini/skills/auto-model-router
+cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .gemini/skills/auto-model-router/SKILL.md
 ```
 
-For a user-wide install, follow the host-specific paths below. Then **start a new chat/session**, ask for a moderate task without naming a model, and look for a line like:
+For a user-wide install, follow the host-specific paths below. Then **start a new chat/session**. A clear rename should auto-continue; a mid-weight or security task should wait:
 
 ```text
+Auto continues on fast — clear bounded rename.
+
 Auto suggests standard — this multi-file routine change fits the standard tier. Confirm to run, or override: fast, standard, reasoning, or max.
 ```
 
-Confirm (or override) before allowing the agent to edit. If the host cannot pause, the suggestion must still appear and your next instruction acts as confirmation.
+Confirm (or override) spendy / high-risk work before allowing the agent to edit. If the host cannot pause, the suggestion must still appear and your next instruction acts as confirmation.
 
 ## Cursor
 
@@ -234,14 +262,16 @@ If the skill is present in the project, create `.cursor/rules/auto-model-router.
 
 ```md
 ---
-description: Ask for a tier confirmation before substantial model-dependent work
+description: Ask for a tier confirmation before spendy or high-risk work
 alwaysApply: true
 ---
 
 Before substantial work or an open model/effort choice, read and follow
-`.cursor/skills/auto-model-router/SKILL.md`. Show the required Auto suggests
-line, wait for confirmation or an override, then use Cursor's model picker.
-Honor any explicit model, provider, effort, or tier choice.
+`.cursor/skills/auto-model-router/SKILL.md`. Show the Auto suggestion line.
+Auto-continue only clear reversible fast work. Wait for confirmation or an
+override on standard / reasoning / max, boundaries, and high-risk work, then
+use Cursor's model picker. Honor any explicit model, provider, effort, or tier
+choice. This rule is not a runtime block — install hooks/cursor.hooks.json for that.
 ```
 
 The rule makes the behavior more discoverable; it does not take control of Cursor's native Auto picker. If you use only a user-wide skill, install an equivalent user-wide rule if your Cursor version supports user rules, or rely on the skill's description and invoke it in the chat.
@@ -250,8 +280,10 @@ The rule makes the behavior more discoverable; it does not take control of Curso
 
 1. Open a **new Agent chat** in the project (or restart Cursor after a user-wide install).
 2. Ask for a mid-weight task, such as: “Add a small validation helper and its tests to this project.” Do not name a model.
-3. Before editing, Agent should show `Auto suggests <tier> — <reason>. Confirm to run, or override...`.
-4. Reply `confirm` or choose another tier. The agent should then use the mapped Cursor picker/effort setting.
+3. Before editing, Agent should show `Auto continues on fast — …` for a clear rename, or `Auto suggests <tier> — <reason>. Confirm to run, or override...` for spendy / high-risk work.
+4. Reply `confirm` or choose another tier when it waits. The agent should then use the mapped Cursor picker/effort setting.
+
+Optional: copy [`hooks/cursor.hooks.json`](hooks/cursor.hooks.json) to `.cursor/hooks.json` (or merge it) so spendy tool calls are denied until you confirm. Copy [`integrations/cursor-tier-map.example.json`](integrations/cursor-tier-map.example.json) to `.auto-model-router/cursor-tier-map.json` and fill in your picker labels. `python3 scripts/detect_active.py` reports local host/tier/model from env, config, or the latest log row — not a live Cursor meter.
 
 ## Claude Code
 
@@ -310,7 +342,7 @@ Keep the include and skill in the repository for cloud use. Do not paste a secon
 
 ### Verify in Claude Code
 
-Start a new Claude Code session after a new top-level skills directory is created. Ask the same kind of mid-weight task without specifying a model or effort. Claude should present the `Auto suggests ... Confirm to run, or override...` line before changing files; reply `confirm` or override explicitly.
+Start a new Claude Code session after a new top-level skills directory is created. A clear rename should print `Auto continues on fast`. A mid-weight or security task should present `Auto suggests ... Confirm to run, or override...` before changing files; reply `confirm` or override explicitly. Optional hard block: merge [`hooks/claude.settings.snippet.json`](hooks/claude.settings.snippet.json) into `.claude/settings.json`.
 
 ## Codex
 
@@ -320,8 +352,9 @@ Codex reads `AGENTS.md` before work. Add a clearly marked section to the project
 ## Auto model routing
 
 Before substantial work or an open model/effort choice, read and follow
-`.agents/skills/auto-model-router/SKILL.md`. Show the Auto suggests line and
-wait for confirmation or an explicit override before editing.
+`.agents/skills/auto-model-router/SKILL.md`. Show the Auto suggestion line.
+Auto-continue only clear reversible fast work; wait for confirmation or an
+explicit override on spendy or high-risk work before editing.
 ```
 
 If Agent Skills are enabled, the current repository/user locations are:
@@ -349,45 +382,139 @@ Some older or configured Codex installations also scan `$CODEX_HOME/skills` (nor
 
 ### Verify in Codex
 
-Start a new Codex run/session so `AGENTS.md` and the skill are read. Ask for a moderate task without selecting a model or reasoning effort. Before making changes, Codex should print the suggestion line and wait for `confirm` or an explicit override. If a TUI session loads instructions only at startup, fully restart it after changing `AGENTS.md`.
+Start a new Codex run/session so `AGENTS.md` and the skill are read. A clear rename should print `Auto continues on fast`. A moderate or security task should print the suggestion line and wait for `confirm` or an explicit override. If a TUI session loads instructions only at startup, fully restart it after changing `AGENTS.md`. Optional hard block: copy [`hooks/codex.hooks.json`](hooks/codex.hooks.json) and trust it with `/hooks`. Codex hosted tools such as web search are outside that local path.
+
+## Gemini
+
+Gemini CLI discovers project skills under `.gemini/skills/` (and `.agents/skills/` as an alias). There is **no official Google plugin catalog** for this repo. `gemini skills install --path` is a git/path copy, not a marketplace badge. Full notes: [`integrations/GEMINI.md`](integrations/GEMINI.md).
+
+### Project install (recommended for teams and cloud agents)
+
+**macOS/Linux**
+
+```bash
+mkdir -p .gemini/skills/auto-model-router
+cp skills/auto-model-router/SKILL.md .gemini/skills/auto-model-router/SKILL.md
+```
+
+**Windows PowerShell**
+
+```powershell
+New-Item -ItemType Directory -Force .gemini\skills\auto-model-router | Out-Null
+Copy-Item skills\auto-model-router\SKILL.md .gemini\skills\auto-model-router\SKILL.md
+```
+
+Commit `.gemini/skills/auto-model-router/SKILL.md` if other people or a remote agent should use it.
+
+### User-wide install
+
+| OS | Path |
+| --- | --- |
+| Windows | `%USERPROFILE%\.gemini\skills\auto-model-router\SKILL.md` |
+| macOS/Linux | `~/.gemini/skills/auto-model-router/SKILL.md` |
+
+`./scripts/apply.sh` / `.\scripts\apply.ps1` copy the skill there along with Cursor, Claude, and Codex.
+
+Optional Gemini CLI helper (still not a Google catalog):
+
+```bash
+gemini skills install https://github.com/1ststepai/auto-model-router.git --path skills/auto-model-router
+# project only:
+gemini skills install https://github.com/1ststepai/auto-model-router.git --path skills/auto-model-router --scope workspace
+```
+
+If `gemini skills` is missing or `--path` differs on your CLI version, use the `cp` path. Workspace skills load only when the folder is trusted (`/trust`). Start a **new** session after installing.
+
+### `GEMINI.md` include
+
+To keep the policy in context every turn, add a marked include from project `GEMINI.md`:
+
+```md
+## Auto model routing
+
+Before substantial work or an open model/effort choice, read and follow
+`.gemini/skills/auto-model-router/SKILL.md`. Auto-continue only clear reversible
+fast work. Wait for confirm or override on standard / reasoning / max and
+high-risk work.
+```
+
+### Capability map (families, not frozen IDs)
+
+Copy [`integrations/gemini-tier-map.example.json`](integrations/gemini-tier-map.example.json) to `.auto-model-router/gemini-tier-map.json` or `~/.auto-model-router/gemini-tier-map.json` and fill in **your** picker labels. Google renames models; the portable skill must not hard-code IDs. Hosts rename locally.
+
+| AMR tier | Gemini family (example) | Typical use |
+| --- | --- | --- |
+| **fast** | Flash / Flash-Lite | Clear, reversible, low-judgment work |
+| **standard** | Pro (default, no extra thinking) | Multi-file routine features — **still confirms** |
+| **reasoning** | Pro with thinking / higher reasoning | Ambiguous, architecture, security (hard-gate when high-risk) |
+| **max** | Deep / thinking-max / strongest available | Research-level or large ambiguous redesigns |
+
+A project may map two AMR tiers onto the same Gemini model and still show the four-tier suggestion.
+
+### Google AI Studio, Antigravity, and other Gemini UIs
+
+Those UIs do not load a Google plugin marketplace from this repo. If they read `.gemini/skills/` or `GEMINI.md`, use the copy/include above. Otherwise paste the skill into custom / system instructions, then pick the mapped model **after** the gate. Same suggest → confirm → run contract. Not a silent model switch and not a billing integration.
+
+### Verify in Gemini
+
+Start a new Gemini CLI session after installing. A clear rename should print `Auto continues on fast`. A CRUD or auth task should wait. Reply `confirm` or override. Optional hard block: merge [`hooks/gemini.settings.snippet.json`](hooks/gemini.settings.snippet.json) into `.gemini/settings.json` (`BeforeAgent` + `BeforeTool`). Gemini CLI hosted tools and the AI Studio picker can still spend without that hook.
+
+## Optional hard confirm gate
+
+Skill text and Cursor rules are reminders. They cannot block a tool call by themselves. To hard-block `standard` / `reasoning` / `max` until you confirm:
+
+```bash
+# Cursor — copy or merge into .cursor/hooks.json
+cp hooks/cursor.hooks.json .cursor/hooks.json
+
+# Claude Code — merge hooks/claude.settings.snippet.json into .claude/settings.json
+# Codex — copy hooks/codex.hooks.json and trust it in /hooks
+# Gemini CLI — merge hooks/gemini.settings.snippet.json into .gemini/settings.json
+```
+
+`python3 scripts/confirm_gate.py` records the user prompt, then denies PreToolUse / BeforeTool until `confirm` / `yes` / a tier name, or `python3 scripts/confirm_gate.py --confirm <tier>` in your own terminal. Tool arguments that set `confirmed: true` (including a shell call to `--confirm`) are ignored. Clear reversible `fast` may auto-continue. If the hook is not installed, say so and wait — do not pretend the gate ran.
+
+Limits: native Auto pickers, vendor GUIs, Codex hosted tools, and Gemini CLI hosted tools can still spend without an agent tool call. This repo cannot hard-block that.
 
 ## Savings estimator (optional)
 
-The repository includes an honest, offline MVP for estimating relative costs from routing decisions. It does not read live Cursor, Claude Code, or Codex billing/token data, scrape a GUI, or access credentials. It uses example relative rates only: `fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`; any percentage is an estimate from your supplied local log, not a guarantee or measured vendor saving.
+The repository includes an honest, offline MVP for estimating relative costs from routing decisions. It does not read live Cursor, Claude Code, Codex, or Gemini billing/token data, scrape a GUI, or access credentials. When a log row has `cost_usd` (or tokens plus a price table you filled from [`demo/prices.example.json`](demo/prices.example.json)), those figures are used and labeled measured. Rows with only a tier use example relative rates: `fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`; any percentage from that fallback is an estimate from your supplied local log, not a guarantee or measured vendor saving.
 
 ```bash
 python3 demo/savings_estimator.py demo/sample_usage_log.json
+python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
 ```
 
-You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log**, or paste your own JSON. After confirmed runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
+You can pass a JSON list of task strings (the demo classifies them) or a decision log with `tier`, `confirmed`, `overridden`, and `timestamp`. For a no-build visual view, run `./scripts/apply.sh` / `.\scripts\apply.ps1` (opens the installed copy under `~/.auto-model-router/demo/dashboard.html`), or open [`demo/dashboard.html`](demo/dashboard.html) from the repo, then click **Load sample log** or **Load measured sample**, or paste your own JSON. After authorized runs, agents may append non-sensitive decisions to `.auto-model-router/usage.jsonl`; the schema is documented in [`SKILL.md`](SKILL.md). Never log prompts, secrets, code, or customer data by default.
 
 ## Any other agent
 
 Put the contents of [`SKILL.md`](SKILL.md) in the agent's custom/system/project instructions or its supported skill directory. If it supports a repository instruction file, commit the policy there. Map the neutral tiers to the available model or effort controls, and preserve this contract:
 
 ```text
-context → classify → suggest → confirm/override → run → escalate if needed
+context → classify → suggest → gate → run → escalate if needed
 ```
 
 If the host has no model control, still display the suggestion and ask for confirmation; do not claim that the host switched models.
 
 ## Cloud and background agents
 
-You **must not** rely on a user-home install for a cloud VM, background agent, remote worker, or fresh checkout. Those machines generally do not have your local `~/.cursor`, `%USERPROFILE%\.cursor`, `~/.claude`, or Codex home directory. Put the **skill and any rule/instruction file in the repository**, for example:
+You **must not** rely on a user-home install for a cloud VM, background agent, remote worker, or fresh checkout. Those machines generally do not have your local `~/.cursor`, `%USERPROFILE%\.cursor`, `~/.claude`, `~/.gemini`, or Codex home directory. Put the **skill and any rule/instruction file in the repository**, for example:
 
 ```text
 .cursor/skills/auto-model-router/SKILL.md
 .cursor/rules/auto-model-router.mdc       # if using Cursor
 .claude/skills/auto-model-router/SKILL.md # if using Claude Code
 .agents/skills/auto-model-router/SKILL.md # if using Codex skills
-AGENTS.md or CLAUDE.md                    # if using project instructions
+.gemini/skills/auto-model-router/SKILL.md # if using Gemini CLI
+AGENTS.md, CLAUDE.md, or GEMINI.md        # if using project instructions
 ```
 
 Commit the files and confirm that the cloud agent checks out the same branch/commit. A host-specific sync feature may offer an additional way to share personal skills, but the repository copy is the dependable option for reproducible cloud runs.
 
 ## Verify the complete flow
 
-Use a new chat/session and a mid-weight request with no explicit model choice. You should see a suggestion and reason **before coding**, followed by a confirmation request. Confirm it, or override with `fast`, `standard`, `reasoning`, `max`, or a host model/effort. The agent should then work with the mapped setting and mention a one-time escalation if the chosen tier proves insufficient.
+Use a new chat/session. A clear rename should auto-continue on `fast`. A mid-weight or security request with no explicit model choice should show a suggestion and reason **before coding**, followed by a confirmation request. Confirm it, or override with `fast`, `standard`, `reasoning`, `max`, or a host model/effort. The agent should then work with the mapped setting and mention a one-time escalation if the chosen tier proves insufficient.
 
 ## Troubleshooting
 
@@ -397,15 +524,19 @@ Start a new chat or fully restart the agent. Many hosts snapshot instructions at
 
 ### The skill is not loaded
 
-Check the exact path, spelling, and required filename `SKILL.md`; keep it inside a folder named `auto-model-router`. Open the host's discovered-skills/instructions view if it has one. For project installs, launch the agent from the repository or a child directory and commit the file. For Codex, prefer `.agents/skills`; for Cursor/Claude, use the host paths above.
+Check the exact path, spelling, and required filename `SKILL.md`; keep it inside a folder named `auto-model-router`. Open the host's discovered-skills/instructions view if it has one. For project installs, launch the agent from the repository or a child directory and commit the file. For Codex, prefer `.agents/skills`; for Gemini CLI, prefer `.gemini/skills`; for Cursor/Claude, use the host paths above.
 
 ### The agent works but stays silent
 
-Check that you installed the optional Cursor rule or added the relevant `AGENTS.md`/`CLAUDE.md` instruction. A skill may be discovered but invoked only when relevant. Ask explicitly: “Apply the auto-model-router policy and suggest a tier before editing.”
+Check that you installed the optional Cursor rule or added the relevant `AGENTS.md`/`CLAUDE.md`/`GEMINI.md` instruction. A skill may be discovered but invoked only when relevant. Ask explicitly: “Apply the auto-model-router policy and suggest a tier before editing.”
+
+### The hook is not blocking spendy tools
+
+Confirm the snippet is installed (`.cursor/hooks.json`, Claude `settings.json`, trusted Codex `/hooks`, or Gemini `.gemini/settings.json` BeforeTool). A skill or `.mdc` rule is not a runtime block. Tool `confirmed: true` is ignored on purpose. Native Auto pickers can still spend without an agent tool call.
 
 ### Cursor's Auto still chooses silently
 
-That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker or force a provider/model change. Verify that the agent itself printed the suggestion and waited for your confirmation; then choose the mapped model/effort in Cursor if needed.
+That is separate from this skill. The skill cannot replace Cursor's built-in Auto picker or force a provider/model change. Verify that the agent itself printed the suggestion and either auto-continued a clear `fast` task or waited for your confirmation; then choose the mapped model/effort in Cursor if needed.
 
 ### Cloud cannot find it
 

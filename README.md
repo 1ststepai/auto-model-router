@@ -6,13 +6,22 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![Python demo](https://img.shields.io/badge/demo-Python%203-3776AB.svg?logo=python&logoColor=white)](demo/classify.py)
 
-**A transparent, user-confirmed policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, or any agent with custom instructions or skills**—without requiring vendor-specific model names or APIs.
+**A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, Gemini, or any agent with custom instructions or skills**—without requiring vendor-specific model names or APIs.
 
 An open-source, provider-agnostic skill for routing coding-agent work to the lightest model or effort tier that can do it well. Product page: [1stStep Auto Model Router](https://www.1ststep.ai/tools/auto-model-router/).
 
-**Flow:** context → classify (`fast` / `standard` / `reasoning` / `max`) → suggest → user confirm/override → run.
+**Flow:** context → classify (`fast` / `standard` / `reasoning` / `max`) → suggest → gate (auto-continue only for clear reversible `fast`; confirm spendy / high-risk) → run.
 
 The repository contains a portable skill, small offline heuristic demo, integration notes, and examples. Copy the skill into each project or add it to your user-level agent instructions so all your projects can use the same routing policy.
+
+## What's new
+
+- **Boundary-gated confirms.** A clear rename auto-continues on `fast`. `standard` / `reasoning` / `max` still wait. High-risk work (secrets, auth, purchases, sends) is a hard-gate. See [`docs/boundary-gated-confirms.md`](docs/boundary-gated-confirms.md).
+- **Hard-block spendy tools (opt-in hook).** Copy [`hooks/cursor.hooks.json`](hooks/cursor.hooks.json) (or the Claude/Codex/Gemini snippet). `scripts/confirm_gate.py` denies tool calls until the user confirms. Tool `confirmed: true` does not unlock the gate.
+- **Confidence.** Vague low-confidence prompts stay on `standard` — the classifier will not guess `max`.
+- **Honest usage log.** When `usage.jsonl` has `input_tokens` / `output_tokens` / `cost_usd`, the estimator and dashboard use those figures. Tier-only rows stay labeled relative units. No vendor billing API.
+- **Gemini is a first-class host.** Same portable skill for Gemini CLI, Google AI Studio, and Antigravity. Install is skill copy (`gemini skills install --path` is still a path copy, not a Google marketplace). Flash → `fast`, Pro → `standard` / `reasoning`, thinking/deep → `max`; hosts rename locally. Same suggest → confirm → run gate.
+- The [live Codex demo](#live-demo) below is a recorded session from before auto-continue; that pass waited on a rename. Current policy would print `Auto continues on fast` for that same clear rename unless you ask it to wait.
 
 ## Live demo
 
@@ -70,11 +79,11 @@ Auto suggests <tier> — <reason>. Confirm to run, or override: fast / standard 
 
 ## Install
 
-**Start with the complete [installation guide](INSTALL.md).** It covers plugin installs, project and user-wide skill copies, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, generic agents, cloud/background agents, and verification.
+**Start with the complete [installation guide](INSTALL.md).** It covers plugin installs, project and user-wide skill copies, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, Gemini, generic agents, cloud/background agents, and verification.
 
-The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery. Plugin manifests for Cursor, Claude Code, and Codex all point at that skill — they do not ship a second policy.
+The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery. Plugin manifests for Cursor, Claude Code, and Codex all point at that skill — they do not ship a second policy. Gemini has no plugin catalog in this repo; copy the skill.
 
-Installing the plugin loads the suggest → confirm skill. It does **not** change vendor billing APIs or guarantee savings.
+Installing the plugin (or Gemini skill copy) loads the boundary-gated suggest → confirm skill. It does **not** change vendor billing APIs or guarantee savings. GitHub plugin install works for Cursor, Claude Code, and Codex; official Cursor Marketplace and Anthropic catalog listings are pending. There is no official Google plugin catalog — do not treat `gemini skills install` as one.
 
 ### Install as a plugin
 
@@ -111,7 +120,7 @@ Plugin install does not open the savings dashboard. Use the apply script for tha
 .\scripts\apply.ps1 -Open
 ```
 
-This copies the skill into user skills dirs (Cursor, Claude, Codex), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
+This copies the skill into user skills dirs (Cursor, Claude, Codex, Gemini), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
 
 **Optional weekly review** (local usage log only — not vendor billing):
 
@@ -140,6 +149,10 @@ cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .claude/skills/a
 # Codex Agent Skills, when supported
 mkdir -p .agents/skills/auto-model-router
 cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .agents/skills/auto-model-router/SKILL.md
+
+# Gemini CLI
+mkdir -p .gemini/skills/auto-model-router
+cp /path/to/auto-model-router/skills/auto-model-router/SKILL.md .gemini/skills/auto-model-router/SKILL.md
 ```
 
 For Codex setups using `AGENTS.md`, add a marked section that points to or contains the policy. For a user-wide install or Windows PowerShell commands, use [INSTALL.md](INSTALL.md).
@@ -155,35 +168,40 @@ python3 demo/classify.py --suggest "Wire up a CRUD endpoint using the existing h
 ```text
 Auto suggests **standard** — Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient. Confirm to run, or override (fast | standard | reasoning | max).
 --- JSON ---
-{"tier": "standard", "reason": "Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient.", "signals": ["known patterns"], "confidence": 0.7}
+{"tier": "standard", "reason": "Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient.", "signals": ["known patterns"], "confidence": 0.7, "needs_confirm": true, "downshifted_from": null, "reversible": true, "high_risk": false, "near_boundary": false, "gate": "confirm", "gate_reason": "spendy tier requires explicit confirm before tools run"}
 ```
 
 ## Savings estimator
 
-If you are running out of Cursor, Claude Code, or Codex usage, this project addresses the **model-overkill** part of the burn: it suggests the lightest tier that can do the job and asks for confirmation before substantial work. It can help slow usage burn **only when** the confirmed lighter tier is mapped to a cheaper/faster model or lower effort and that choice is what actually runs. The included estimator uses illustrative relative rates (`fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`) to compare your local routed log with always-reasoning and always-max baselines:
+If you are running out of Cursor, Claude Code, Codex, or Gemini usage, this project addresses the **model-overkill** part of the burn: it suggests the lightest tier that can do the job, auto-continues only clear reversible `fast` work, and asks for confirmation before spendy or high-risk work. It can help slow usage burn **only when** the authorized lighter tier is mapped to a cheaper/faster model or lower effort and that choice is what actually runs. The included estimator prefers logged `cost_usd` / tokens when present; otherwise it uses illustrative relative rates (`fast=1x`, `standard=3x`, `reasoning=8x`, `max=20x`) to compare your local routed log with always-reasoning and always-max baselines:
 
 ```bash
 python3 demo/savings_estimator.py demo/sample_usage_log.json
-# Or run ./scripts/apply.sh (opens ~/.auto-model-router/demo/dashboard.html), then Load sample log.
-# Optional: open demo/dashboard.html from the repo and load the sample log or paste your own JSON.
+python3 demo/savings_estimator.py demo/sample_measured_usage.jsonl
+# Or run ./scripts/apply.sh (opens ~/.auto-model-router/demo/dashboard.html), then Load sample log
+# or Load measured sample. Optional: pass --prices after filling demo/prices.example.json.
 ```
 
-This is not live billing or token accounting: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. Percentages are estimates from the supplied local log, not promises or measured vendor savings. After confirmed runs, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`INSTALL.md`](INSTALL.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
+This is not live billing: coding-agent GUIs do not expose a reliable third-party billing API to this skill, so it does not scrape dashboards or access credentials. When the log has `cost_usd` (or tokens plus a price table you filled), those figures are used and labeled measured. Tier-only rows stay labeled illustrative. Percentages from the illustrative fallback are not promises or vendor savings. After authorized runs, an agent may append local, non-sensitive decisions to `.auto-model-router/usage.jsonl`; see [`SKILL.md`](SKILL.md) and [`INSTALL.md`](INSTALL.md) for the schema. Tools such as **lean.ctx** and **ponytail** are complementary peers: they reduce how much context you send, while this router reduces which model tier you spend on. Together they form a usage-discipline stack that may help slow burn when their respective choices actually reduce cost; there is no affiliation claim.
 
 ## Supported hosts
 
 - [Cursor Agent](integrations/CURSOR.md) (project/user skills plus an optional always-apply rule)
 - [Claude Code](integrations/CLAUDE.md) (project/personal skills or `CLAUDE.md`)
 - [Codex](integrations/CODEX.md) (`AGENTS.md` and supported Agent Skills)
+- [Gemini](integrations/GEMINI.md) (Gemini CLI skills / `GEMINI.md`, Google AI Studio, Antigravity — skill copy, not a Google marketplace)
 - Any agent with custom instructions or a skills directory
 
 Cloud/background agents should use the committed project copy, not only a local user-home skill.
 
 ## How you'll know it works
 
-Start a **new** chat/session and ask for a mid-weight task without naming a model. Before coding, you should see the suggest → confirm step:
+Start a **new** chat/session and ask for a mid-weight task without naming a model. Before coding, you should see the suggest → gate step:
 
 ```text
+You: Rename the variable foo to bar in utils.py
+Agent: Auto continues on fast — clear bounded rename.
+
 You: Wire up a CRUD endpoint using the existing handler pattern.
 Agent: Auto suggests standard — this matches a known multi-file pattern. Confirm to run,
        or override: fast, standard, reasoning, or max.
@@ -198,7 +216,7 @@ Then verify the agent uses the mapped model/effort. Cursor's built-in Auto picke
 | | Silent Auto / native picker | Auto Model Router |
 | --- | --- | --- |
 | Decision | Host chooses internally | Agent explains a capability tier first |
-| User control | Depends on the host UI | Confirm or override before substantial work |
+| User control | Depends on the host UI | Auto-continue only when clearly safe `fast`; confirm spendy / high-risk |
 | Model names | Host-specific | Neutral tiers mapped locally to available models/effort |
 | Cloud use | Host-dependent | Commit the skill and rule/instructions in the project |
 | Scope | Native picker behavior | Portable agent instructions; does not replace native Auto |
@@ -207,16 +225,16 @@ Then verify the agent uses the mapped model/effort. Cursor's built-in Auto picke
 
 When people run out of usage or burn through tokens, over-provisioning is one avoidable source of waste: slow, expensive models get used for trivial edits while genuinely ambiguous work can still be under-provisioned. Auto model routing reduces that choice overhead **without silently changing what runs**:
 
-Tools such as **lean.ctx** and **ponytail** address a complementary waste: they reduce how much context you send. This skill reduces which model tier you spend on, with a visible suggestion and confirmation before substantial work. It does not shrink context, and it can help slow usage burn only when a confirmed lighter tier actually maps to a cheaper/faster model or lower effort. Together, less context waste plus less model overkill may form a useful usage-discipline stack for Cursor/Claude/Codex. They are peer tools, not competitors, and this project is not affiliated with them; no savings are guaranteed.
+Tools such as **lean.ctx** and **ponytail** address a complementary waste: they reduce how much context you send. This skill reduces which model tier you spend on, with a visible suggestion and confirmation before spendy or high-risk work. Clear reversible `fast` work may auto-continue. It does not shrink context, and it can help slow usage burn only when an authorized lighter tier actually maps to a cheaper/faster model or lower effort. Together, less context waste plus less model overkill may form a useful usage-discipline stack for Cursor/Claude/Codex/Gemini. They are peer tools, not competitors, and this project is not affiliated with them; no savings are guaranteed.
 
 1. Read the task context: scope, ambiguity, risk, reversibility, and judgment required.
 2. Classify it into the lightest sufficient tier: `fast`, `standard`, `reasoning`, or `max`.
 3. Suggest the tier and give a short reason.
-4. Let the user confirm or override it.
+4. Auto-continue only for clear reversible `fast`. Wait for confirm or override on spendy tiers, boundaries, and high-risk work.
 5. Run with the chosen provider/model/effort mapping.
-6. Escalate after a clearly insufficient or failed light attempt, and say so once.
+6. Escalate after a clearly insufficient or failed light attempt, stop for confirm, and say so once.
 
-An explicit user model or effort choice always wins. Hosts that cannot pause for confirmation should present the suggestion and treat the user's next instruction as the confirmation or override; they should not silently dispatch a surprising choice.
+An explicit user model or effort choice always wins. Hosts that cannot pause for confirmation should present the suggestion and treat the user's next instruction as the confirmation or override; they should not silently dispatch a surprising choice. An optional hook can hard-block spendy tool calls until that confirm.
 
 ## Tier rubric
 
@@ -239,14 +257,19 @@ The demo is intentionally dependency-free Python 3:
 python3 demo/classify.py --examples
 python3 demo/classify.py "Rename foo to bar in utils.py"
 python3 demo/classify.py --suggest "Debug intermittent auth failures"
+python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json \
+  --current-tier max "Rename the variable foo to bar in utils.py"
+python3 demo/classify.py --suggest --map integrations/gemini-tier-map.example.json \
+  --host Gemini --current-tier max "Rename the variable foo to bar in utils.py"
 echo "Debug intermittent auth failures" | python3 demo/classify.py
+python3 -m unittest tests.test_router -v
 ```
 
-`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `reason`, `signals`, and `confidence`.
+`--suggest` prints a human-facing suggestion followed by JSON. The normal output is JSON with `tier`, `gate`, `reason`, `signals`, `confidence`, `needs_confirm`, and `downshifted_from`.
 
 ## Honest scope
 
-This is a readable heuristic rubric and a portable agent skill, **not production ML** and not a benchmark of any provider. Real deployments should calibrate mappings against their own models, latency, cost, quality, and safety data. The stable contract is the user-controlled flow: **context → classify → suggest → confirm/override → run → escalate**.
+This is a readable heuristic rubric and a portable agent skill, **not production ML** and not a benchmark of any provider. Real deployments should calibrate mappings against their own models, latency, cost, quality, and safety data. The stable contract is: **context → classify → suggest → gate → run → escalate**.
 
 ## Repository layout
 
@@ -270,13 +293,24 @@ skills/auto-model-router/SKILL.md     # canonical skill (single source of truth)
 scripts/apply.sh / apply.ps1           # apply skill + open dashboard (--no-open, weekly review flags)
 scripts/validate-plugins.py            # best-effort plugin manifest checks
 scripts/weekly_review.py               # opt-in local usage-log weekly summary
+scripts/confirm_gate.py                # optional PreToolUse / BeforeTool hard block
+scripts/detect_active.py               # optional local host/tier/model probe
+auto_model_router.py                   # classify + gate + optional usage log
+hooks/                                 # Cursor / Claude / Codex / Gemini hook snippets
+tests/test_router.py                   # gate, confidence, usage, route, Gemini tests
 integrations/CURSOR.md
 integrations/CLAUDE.md
 integrations/CODEX.md
+integrations/GEMINI.md
+integrations/cursor-tier-map.example.json
+integrations/gemini-tier-map.example.json
+docs/boundary-gated-confirms.md
 docs/images/codex-live-pass.png        # real Codex live-demo screenshot
 demo/classify.py                       # offline heuristic checker
-demo/savings_estimator.py              # relative usage estimator
+demo/savings_estimator.py              # measured-or-illustrative usage estimator
 demo/sample_usage_log.json             # fake demo routing log
+demo/sample_measured_usage.jsonl       # fake log with cost_usd
+demo/prices.example.json               # empty price table (fill locally)
 demo/dashboard.html                    # no-build local dashboard
 examples.md
 CONTRIBUTING.md

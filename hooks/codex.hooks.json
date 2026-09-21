@@ -1,0 +1,29 @@
+{
+  "description": "Block spendy-tier tool calls until the user explicitly confirms. Trust this hook in Codex /hooks.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/confirm_gate.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 scripts/confirm_gate.py",
+            "timeout": 10,
+            "statusMessage": "Checking auto-model-router confirm gate"
+          }
+        ]
+      }
+    ]
+  }
+}
