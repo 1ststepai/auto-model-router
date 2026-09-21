@@ -20,8 +20,11 @@ from auto_model_router import (  # noqa: E402
     append_usage,
     evaluate_tool,
     ingest_user_prompt,
+    load_gate,
     load_price_table,
     route,
+    safe_local_path,
+    save_gate,
     summarize_usage,
 )
 from demo.classify import EXAMPLES, LOW_CONFIDENCE, classify, load_tier_map, picker_action  # noqa: E402
@@ -157,6 +160,14 @@ class GateTests(unittest.TestCase):
         self.assertFalse(state["confirmed"])
         decision = evaluate_tool(state, {"tool_name": "Bash", "tool_input": {"command": "echo hi"}})
         self.assertFalse(decision["allowed"])
+
+    def test_gate_file_must_stay_local(self) -> None:
+        outside = Path("/etc/passwd")
+        with self.assertRaises(ValueError):
+            safe_local_path(outside)
+        self.assertEqual(load_gate(outside), {})
+        with self.assertRaises(ValueError):
+            save_gate({"tier": "fast", "confirmed": True}, outside)
 
     def test_gemini_before_tool_blocks_then_allows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

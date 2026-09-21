@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional
@@ -42,17 +43,55 @@ def classify_task(task: str) -> dict:
     return classify(task)
 
 
+def _abspath(raw: os.PathLike[str] | str) -> str:
+    return os.path.abspath(os.path.expanduser(os.fspath(raw)))
+
+
+def _is_under(resolved: str, root: str) -> bool:
+    if resolved == root:
+        return True
+    prefix = root if root.endswith(os.sep) else root + os.sep
+    return resolved.startswith(prefix)
+
+
+def allowed_file_roots() -> tuple[str, ...]:
+    roots = [
+        _abspath(Path.cwd()),
+        _abspath(Path.home() / ".auto-model-router"),
+        _abspath(tempfile.gettempdir()),
+        _abspath(ROOT),
+    ]
+    extra = os.environ.get("AUTO_MODEL_ROUTER_FILE_ROOT")
+    if extra:
+        roots.append(_abspath(extra))
+    return tuple(roots)
+
+
+def safe_local_path(raw: os.PathLike[str] | str) -> Path:
+    """Resolve a local path and refuse anything outside cwd, repo, AMR home, or temp."""
+    text = os.fspath(raw)
+    if "\x00" in text:
+        raise ValueError("path must not contain NUL")
+    resolved = _abspath(text)
+    if not any(_is_under(resolved, root) for root in allowed_file_roots()):
+        raise ValueError(f"refusing path outside allowed directories: {resolved}")
+    return Path(resolved)
+
+
 def gate_path(explicit: Optional[os.PathLike[str] | str] = None) -> Path:
     if explicit:
-        return Path(explicit)
+        return safe_local_path(explicit)
     env = os.environ.get("AUTO_MODEL_ROUTER_GATE")
     if env:
-        return Path(env)
-    return Path(".auto-model-router") / "gate.json"
+        return safe_local_path(env)
+    return safe_local_path(Path(".auto-model-router") / "gate.json")
 
 
 def load_gate(path: Optional[os.PathLike[str] | str] = None) -> Dict[str, Any]:
-    file = gate_path(path)
+    try:
+        file = gate_path(path)
+    except ValueError:
+        return {}
     if not file.is_file():
         return {}
     try:
@@ -321,7 +360,7 @@ def _usage_record(
 def append_usage(path: os.PathLike[str] | str, record: Mapping[str, Any]) -> Path:
     """Append one JSON object to a local usage.jsonl. Does not call a vendor API."""
     _tier(record.get("tier"), "usage")
-    file = Path(path)
+    file = safe_local_path(path)
     file.parent.mkdir(parents=True, exist_ok=True)
     with file.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(dict(record), separators=(",", ":")) + "\n")
@@ -331,7 +370,7 @@ def append_usage(path: os.PathLike[str] | str, record: Mapping[str, Any]) -> Pat
 def load_price_table(path: Optional[os.PathLike[str] | str]) -> Optional[Dict[str, Any]]:
     if path is None:
         return None
-    file = Path(path)
+    file = safe_local_path(path)
     if not file.is_file():
         return None
     data = json.loads(file.read_text(encoding="utf-8"))
@@ -394,7 +433,7 @@ def summarize_usage(
     This never invents vendor dollar rates. Nulls in the example price table stay unpriced.
     """
     rows = list(entries)
-    by_tier = {tier: 0 for tier in TIERS}
+    by_tier = dict.fromkeys(TIERS, 0)
     confirmed = 0
     overridden = 0
     input_tokens = 0

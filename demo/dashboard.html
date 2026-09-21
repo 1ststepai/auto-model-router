@@ -36,6 +36,7 @@
     <p>Load the included sample, the measured sample (<code>cost_usd</code> when present), choose a JSON/JSONL file, or paste an array of decisions with <code>tier</code>, <code>confirmed</code>, <code>overridden</code>, and optional <code>input_tokens</code> / <code>output_tokens</code> / <code>cost_usd</code>.</p>
     <button id="sample">Load sample log</button>
     <button id="measured">Load measured sample</button>
+    <label for="file">Choose a routing log file</label>
     <input id="file" type="file" accept="application/json,.json,.jsonl">
     <textarea id="input" aria-label="Routing log JSON" placeholder='[{"tier":"fast","confirmed":true,"overridden":false,"timestamp":"2026-09-20T12:00:00Z"}]'></textarea>
     <br><button id="calculate">Calculate estimates</button>

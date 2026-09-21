@@ -27,7 +27,7 @@ try:
 except ImportError:
     from demo.classify import classify
 
-from auto_model_router import TIERS, load_price_table, summarize_usage  # noqa: E402
+from auto_model_router import TIERS, load_price_table, safe_local_path, summarize_usage  # noqa: E402
 
 
 def _as_bool(value: Any) -> bool:
@@ -172,6 +172,7 @@ def human_summary(result: Dict[str, Any]) -> str:
 
 
 def load_input(path: Path) -> Any:
+    path = safe_local_path(path)
     text = path.read_text(encoding="utf-8")
     if path.suffix == ".jsonl":
         rows = []
@@ -193,8 +194,8 @@ def main(argv: List[str]) -> int:
         parser.error("choose at most one of --tasks and --log")
     mode = "tasks" if args.tasks else "log" if args.log else None
     try:
-        payload = load_input(Path(args.input))
-        prices = load_price_table(args.prices) if args.prices else None
+        payload = load_input(safe_local_path(args.input))
+        prices = load_price_table(safe_local_path(args.prices)) if args.prices else None
         if args.prices and prices is None:
             raise ValueError(f"price table not found: {args.prices}")
         kind, entries = normalize(payload, mode)
