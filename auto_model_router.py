@@ -43,39 +43,82 @@ def classify_task(task: str) -> dict:
     return classify(task)
 
 
-def _abspath(raw: os.PathLike[str] | str) -> str:
-    return os.path.abspath(os.path.expanduser(os.fspath(raw)))
-
-
-def _is_under(resolved: str, root: str) -> bool:
-    if resolved == root:
-        return True
-    prefix = root if root.endswith(os.sep) else root + os.sep
-    return resolved.startswith(prefix)
-
-
-def allowed_file_roots() -> tuple[str, ...]:
-    roots = [
-        _abspath(Path.cwd()),
-        _abspath(Path.home() / ".auto-model-router"),
-        _abspath(tempfile.gettempdir()),
-        _abspath(ROOT),
-    ]
-    extra = os.environ.get("AUTO_MODEL_ROUTER_FILE_ROOT")
-    if extra:
-        roots.append(_abspath(extra))
-    return tuple(roots)
-
-
-def safe_local_path(raw: os.PathLike[str] | str) -> Path:
-    """Resolve a local path and refuse anything outside cwd, repo, AMR home, or temp."""
+def _checked_local(raw: os.PathLike[str] | str) -> str:
+    """realpath + startswith so file IO cannot follow a CLI/LLM path outside local roots."""
     text = os.fspath(raw)
     if "\x00" in text:
         raise ValueError("path must not contain NUL")
-    resolved = _abspath(text)
-    if not any(_is_under(resolved, root) for root in allowed_file_roots()):
+    resolved = os.path.realpath(os.path.expanduser(text))
+    cwd = os.path.realpath(os.getcwd())
+    home = os.path.realpath(os.path.expanduser(os.path.join("~", ".auto-model-router")))
+    tmp = os.path.realpath(tempfile.gettempdir())
+    repo = os.path.realpath(str(ROOT))
+    if not (
+        resolved.startswith(cwd + os.sep)
+        or resolved == cwd
+        or resolved.startswith(home + os.sep)
+        or resolved == home
+        or resolved.startswith(tmp + os.sep)
+        or resolved == tmp
+        or resolved.startswith(repo + os.sep)
+        or resolved == repo
+    ):
         raise ValueError(f"refusing path outside allowed directories: {resolved}")
-    return Path(resolved)
+    return resolved
+
+
+def safe_local_path(raw: os.PathLike[str] | str) -> Path:
+    return Path(_checked_local(raw))
+
+
+def read_local_text(raw: os.PathLike[str] | str) -> str:
+    text = os.fspath(raw)
+    if "\x00" in text:
+        raise ValueError("path must not contain NUL")
+    resolved = os.path.realpath(os.path.expanduser(text))
+    cwd = os.path.realpath(os.getcwd())
+    home = os.path.realpath(os.path.expanduser(os.path.join("~", ".auto-model-router")))
+    tmp = os.path.realpath(tempfile.gettempdir())
+    repo = os.path.realpath(str(ROOT))
+    if not (
+        resolved.startswith(cwd + os.sep)
+        or resolved == cwd
+        or resolved.startswith(home + os.sep)
+        or resolved == home
+        or resolved.startswith(tmp + os.sep)
+        or resolved == tmp
+        or resolved.startswith(repo + os.sep)
+        or resolved == repo
+    ):
+        raise ValueError(f"refusing path outside allowed directories: {resolved}")
+    with open(resolved, encoding="utf-8") as handle:
+        return handle.read()
+
+
+def write_local_text(raw: os.PathLike[str] | str, body: str, *, append: bool = False) -> str:
+    text = os.fspath(raw)
+    if "\x00" in text:
+        raise ValueError("path must not contain NUL")
+    resolved = os.path.realpath(os.path.expanduser(text))
+    cwd = os.path.realpath(os.getcwd())
+    home = os.path.realpath(os.path.expanduser(os.path.join("~", ".auto-model-router")))
+    tmp = os.path.realpath(tempfile.gettempdir())
+    repo = os.path.realpath(str(ROOT))
+    if not (
+        resolved.startswith(cwd + os.sep)
+        or resolved == cwd
+        or resolved.startswith(home + os.sep)
+        or resolved == home
+        or resolved.startswith(tmp + os.sep)
+        or resolved == tmp
+        or resolved.startswith(repo + os.sep)
+        or resolved == repo
+    ):
+        raise ValueError(f"refusing path outside allowed directories: {resolved}")
+    os.makedirs(os.path.dirname(resolved), exist_ok=True)
+    with open(resolved, "a" if append else "w", encoding="utf-8") as handle:
+        handle.write(body)
+    return resolved
 
 
 def gate_path(explicit: Optional[os.PathLike[str] | str] = None) -> Path:
@@ -89,22 +132,15 @@ def gate_path(explicit: Optional[os.PathLike[str] | str] = None) -> Path:
 
 def load_gate(path: Optional[os.PathLike[str] | str] = None) -> Dict[str, Any]:
     try:
-        file = gate_path(path)
-    except ValueError:
-        return {}
-    if not file.is_file():
-        return {}
-    try:
-        data = json.loads(file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        data = json.loads(read_local_text(gate_path(path)))
+    except (OSError, ValueError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
 
 
 def save_gate(state: Mapping[str, Any], path: Optional[os.PathLike[str] | str] = None) -> Path:
     file = gate_path(path)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    file.write_text(json.dumps(dict(state), indent=2) + "\n", encoding="utf-8")
+    write_local_text(file, json.dumps(dict(state), indent=2) + "\n")
     return file
 
 
@@ -360,22 +396,23 @@ def _usage_record(
 def append_usage(path: os.PathLike[str] | str, record: Mapping[str, Any]) -> Path:
     """Append one JSON object to a local usage.jsonl. Does not call a vendor API."""
     _tier(record.get("tier"), "usage")
-    file = safe_local_path(path)
-    file.parent.mkdir(parents=True, exist_ok=True)
-    with file.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(dict(record), separators=(",", ":")) + "\n")
-    return file
+    resolved = write_local_text(
+        path,
+        json.dumps(dict(record), separators=(",", ":")) + "\n",
+        append=True,
+    )
+    return Path(resolved)
 
 
 def load_price_table(path: Optional[os.PathLike[str] | str]) -> Optional[Dict[str, Any]]:
     if path is None:
         return None
-    file = safe_local_path(path)
-    if not file.is_file():
+    try:
+        data = json.loads(read_local_text(path))
+    except FileNotFoundError:
         return None
-    data = json.loads(file.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{file}: price table must be a JSON object")
+        raise ValueError(f"{path}: price table must be a JSON object")
     return data
 
 

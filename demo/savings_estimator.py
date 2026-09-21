@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -27,7 +29,7 @@ try:
 except ImportError:
     from demo.classify import classify
 
-from auto_model_router import TIERS, load_price_table, safe_local_path, summarize_usage  # noqa: E402
+from auto_model_router import TIERS, load_price_table, summarize_usage  # noqa: E402
 
 
 def _as_bool(value: Any) -> bool:
@@ -171,16 +173,35 @@ def human_summary(result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def load_input(path: Path) -> Any:
-    path = safe_local_path(path)
-    text = path.read_text(encoding="utf-8")
-    if path.suffix == ".jsonl":
+def load_input(path: Path | str) -> Any:
+    text = os.fspath(path)
+    if "\x00" in text:
+        raise ValueError("path must not contain NUL")
+    resolved = os.path.realpath(os.path.expanduser(text))
+    cwd = os.path.realpath(os.getcwd())
+    home = os.path.realpath(os.path.expanduser(os.path.join("~", ".auto-model-router")))
+    tmp = os.path.realpath(tempfile.gettempdir())
+    repo = os.path.realpath(str(HERE.parent.parent if HERE.parent.name == "demo" else HERE.parent))
+    if not (
+        resolved.startswith(cwd + os.sep)
+        or resolved == cwd
+        or resolved.startswith(home + os.sep)
+        or resolved == home
+        or resolved.startswith(tmp + os.sep)
+        or resolved == tmp
+        or resolved.startswith(repo + os.sep)
+        or resolved == repo
+    ):
+        raise ValueError(f"refusing path outside allowed directories: {resolved}")
+    with open(resolved, encoding="utf-8") as handle:
+        body = handle.read()
+    if resolved.endswith(".jsonl"):
         rows = []
-        for line in text.splitlines():
+        for line in body.splitlines():
             if line.strip():
                 rows.append(json.loads(line))
         return rows
-    return json.loads(text)
+    return json.loads(body)
 
 
 def main(argv: List[str]) -> int:
@@ -188,14 +209,14 @@ def main(argv: List[str]) -> int:
     parser.add_argument("input", nargs="?", default="demo/sample_usage_log.json", help="JSON tasks, routing log, or usage.jsonl")
     parser.add_argument("--tasks", action="store_true", help="treat a JSON array/object as task descriptions")
     parser.add_argument("--log", action="store_true", help="treat a JSON array/object as routing decisions")
-    parser.add_argument("--prices", type=Path, default=None, help="local price table JSON you filled (optional)")
+    parser.add_argument("--prices", default=None, help="local price table JSON you filled (optional)")
     args = parser.parse_args(argv[1:])
     if args.tasks and args.log:
         parser.error("choose at most one of --tasks and --log")
     mode = "tasks" if args.tasks else "log" if args.log else None
     try:
-        payload = load_input(safe_local_path(args.input))
-        prices = load_price_table(safe_local_path(args.prices)) if args.prices else None
+        payload = load_input(args.input)
+        prices = load_price_table(args.prices) if args.prices else None
         if args.prices and prices is None:
             raise ValueError(f"price table not found: {args.prices}")
         kind, entries = normalize(payload, mode)

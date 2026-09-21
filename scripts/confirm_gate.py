@@ -76,7 +76,7 @@ def _is_tool_event(payload: dict) -> bool:
     }
 
 
-def handle_payload(payload: dict, state_file: Path) -> int:
+def handle_payload(payload: dict, state_file=None) -> int:
     if _is_tool_event(payload):
         decision = evaluate_tool(load_gate(state_file), payload)
         _emit(decision)
@@ -107,21 +107,20 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suggest", metavar="TASK", help="classify a task and store an unconfirmed gate")
     parser.add_argument("--confirm", metavar="TIER", help="record an explicit user confirm (run outside the agent)")
-    parser.add_argument("--state", type=Path, default=None, help="gate file (default: $AUTO_MODEL_ROUTER_GATE or .auto-model-router/gate.json)")
     parser.add_argument("--status", action="store_true", help="print the current gate file")
     args = parser.parse_args(argv[1:])
 
     if args.confirm:
-        state = record_confirmation(args.confirm, path=args.state)
+        state = record_confirmation(args.confirm)
         print(json.dumps(state))
         return 0
     if args.suggest:
         state = ingest_user_prompt(args.suggest, None)
-        save_gate(state, args.state)
+        save_gate(state)
         print(json.dumps(state, indent=2))
         return 0
     if args.status:
-        print(json.dumps(load_gate(args.state), indent=2))
+        print(json.dumps(load_gate(), indent=2))
         return 0
 
     if sys.stdin.isatty():
@@ -139,7 +138,7 @@ def main(argv: list[str]) -> int:
     if not isinstance(payload, dict):
         print("blocked: hook payload must be a JSON object", file=sys.stderr)
         return 2
-    return handle_payload(payload, args.state)
+    return handle_payload(payload)
 
 
 if __name__ == "__main__":
