@@ -202,6 +202,7 @@ echo "Applying auto-model-router..."
 install_skill "$HOME_DIR/.cursor/skills/auto-model-router"
 install_skill "$HOME_DIR/.claude/skills/auto-model-router"
 install_skill "$HOME_DIR/.codex/skills/auto-model-router"
+install_skill "$HOME_DIR/.gemini/skills/auto-model-router"
 
 # Demo + estimator + sample log under ~/.auto-model-router/demo
 mkdir -p "$DEMO_DEST" "$LOGS_DEST"
@@ -304,7 +305,7 @@ WEEKLY_ON="$(read_config_bool weeklyReview false)"
 
 echo
 echo "Success: auto-model-router applied."
-echo "  Skills: ~/.cursor, ~/.claude, ~/.codex (under skills/auto-model-router/)"
+echo "  Skills: ~/.cursor, ~/.claude, ~/.codex, ~/.gemini (under skills/auto-model-router/)"
 echo "  Dashboard: $DASHBOARD"
 echo "  Config: $CONFIG_FILE"
 if [[ "$SHOULD_OPEN" -eq 0 ]]; then
@@ -324,5 +325,5 @@ else
   echo "  Weekly review: disabled (opt-in). Enable: ./scripts/apply.sh --enable-weekly-review"
 fi
 echo
-echo "Note: Cursor/Claude loading SKILL.md alone cannot open a GUI."
+echo "Note: Cursor/Claude/Gemini loading SKILL.md alone cannot open a GUI."
 echo "      \"Apply\" means running this script so the dashboard auto-starts."

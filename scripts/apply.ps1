@@ -151,6 +151,7 @@ Write-Host "Applying auto-model-router..."
 Install-Skill (Join-Path $HomeDir ".cursor\skills\auto-model-router")
 Install-Skill (Join-Path $HomeDir ".claude\skills\auto-model-router")
 Install-Skill (Join-Path $HomeDir ".codex\skills\auto-model-router")
+Install-Skill (Join-Path $HomeDir ".gemini\skills\auto-model-router")
 
 New-Item -ItemType Directory -Force -Path $DemoDest | Out-Null
 New-Item -ItemType Directory -Force -Path $LogsDest | Out-Null
@@ -237,7 +238,7 @@ if ($ShouldOpen) {
 
 Write-Host ""
 Write-Host "Success: auto-model-router applied."
-Write-Host "  Skills: %USERPROFILE%\.cursor, .claude, .codex (under skills\auto-model-router\)"
+Write-Host "  Skills: %USERPROFILE%\.cursor, .claude, .codex, .gemini (under skills\auto-model-router\)"
 Write-Host "  Dashboard: $Dashboard"
 Write-Host "  Config: $ConfigFile"
 if (-not $ShouldOpen) {
@@ -257,5 +258,5 @@ if ($cfg.weeklyReview) {
   Write-Host "  Weekly review: disabled (opt-in). Enable: .\scripts\apply.ps1 -EnableWeeklyReview"
 }
 Write-Host ""
-Write-Host "Note: Cursor/Claude loading SKILL.md alone cannot open a GUI."
+Write-Host "Note: Cursor/Claude/Gemini loading SKILL.md alone cannot open a GUI."
 Write-Host "      `"Apply`" means running this script so the dashboard auto-starts."

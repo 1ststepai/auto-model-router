@@ -5,7 +5,7 @@ Priority: --host / --current-tier / --current-model → env AMR_HOST,
 AMR_CURRENT_TIER, AMR_CURRENT_MODEL → ~/.auto-model-router/config.json
 (currentHost / currentTier / currentModel) → most recent usage.jsonl row.
 
-Does not read live Cursor, Claude Code, or Codex pickers or meters.
+Does not read live Cursor, Claude Code, Codex, or Gemini pickers or meters.
 Optional: pass the printed tier to demo/classify.py --current-tier.
 
   python3 scripts/detect_active.py

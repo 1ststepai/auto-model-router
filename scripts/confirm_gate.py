@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pre-tool confirm gate for Codex, Claude Code, and Cursor hooks.
+"""Pre-tool confirm gate for Codex, Claude Code, Cursor, and Gemini CLI hooks.
 
 Exit 2 denies the tool call. Tool arguments cannot confirm themselves.
 A user prompt hook (or this script's --confirm, run outside the agent)
@@ -36,11 +36,13 @@ from auto_model_router import (  # noqa: E402
 def _emit(decision: dict) -> None:
     reason = decision["reason"]
     if decision["allowed"]:
-        json.dump({"permission": "allow"}, sys.stdout)
+        json.dump({"permission": "allow", "decision": "allow"}, sys.stdout)
         sys.stdout.write("\n")
         return
     body = {
         "permission": "deny",
+        "decision": "deny",
+        "reason": reason,
         "user_message": reason,
         "agent_message": reason,
         "hookSpecificOutput": {
@@ -54,11 +56,24 @@ def _emit(decision: dict) -> None:
     print(reason, file=sys.stderr)
 
 
+def _event_name(payload: dict) -> str:
+    return str(
+        payload.get("hook_event_name")
+        or payload.get("hookEventName")
+        or payload.get("event")
+        or ""
+    )
+
+
 def _is_tool_event(payload: dict) -> bool:
     if payload.get("tool_name") or payload.get("tool_input") or payload.get("toolInput"):
         return True
-    event = str(payload.get("hook_event_name") or payload.get("event") or "")
-    return event.lower() in {"pretooluse", "beforeshellexecution", "beforemcpexecution"}
+    return _event_name(payload).lower() in {
+        "pretooluse",
+        "beforeshellexecution",
+        "beforemcpexecution",
+        "beforetool",
+    }
 
 
 def handle_payload(payload: dict, state_file: Path) -> int:
@@ -66,8 +81,13 @@ def handle_payload(payload: dict, state_file: Path) -> int:
         decision = evaluate_tool(load_gate(state_file), payload)
         _emit(decision)
         return 0 if decision["allowed"] else 2
-    event = str(payload.get("hook_event_name") or payload.get("event") or "")
-    if "prompt" in payload or event in {"UserPromptSubmit", "beforeSubmitPrompt"}:
+    event = _event_name(payload)
+    if "prompt" in payload or event in {
+        "UserPromptSubmit",
+        "beforeSubmitPrompt",
+        "BeforeAgent",
+        "BeforeModel",
+    }:
         text = payload.get("prompt")
         if text is None:
             text = payload.get("user_message") or payload.get("text") or ""

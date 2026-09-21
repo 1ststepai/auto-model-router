@@ -38,6 +38,8 @@ python3 demo/classify.py --examples
 python3 demo/classify.py --suggest "Debug intermittent checkout auth failures"
 python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json \
   --current-tier max "Rename the variable foo to bar in utils.py"
+python3 demo/classify.py --suggest --map integrations/gemini-tier-map.example.json \
+  --host Gemini --current-tier max "Rename the variable foo to bar in utils.py"
 python3 -m unittest tests.test_router -v
 python3 -m compileall -q demo scripts auto_model_router.py tests
 python3 demo/savings_estimator.py demo/sample_usage_log.json

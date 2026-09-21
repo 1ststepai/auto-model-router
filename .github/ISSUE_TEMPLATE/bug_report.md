@@ -8,7 +8,7 @@ assignees: ""
 
 ## What happened?
 
-<!-- Describe the observed behavior and the host (Cursor, Claude Code, Codex, or other). -->
+<!-- Describe the observed behavior and the host (Cursor, Claude Code, Codex, Gemini, or other). -->
 
 ## What did you expect?
 

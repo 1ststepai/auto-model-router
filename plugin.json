@@ -15,7 +15,8 @@
     "agent-skills",
     "cursor",
     "claude-code",
-    "codex"
+    "codex",
+    "gemini"
   ],
   "extensions": {
     "com.openai": {

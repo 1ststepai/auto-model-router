@@ -5,7 +5,7 @@ Summarizes tiers confirmed/overridden and illustrative relative-unit estimates
 from ~/.auto-model-router/logs/usage.jsonl (or a project .auto-model-router/usage.jsonl).
 
 Honest scope: this is a local log summary only. It does not read Cursor, Claude
-Code, Codex, or any vendor billing/token API. Rates are example relative units.
+Code, Codex, Gemini, or any vendor billing/token API. Rates are example relative units.
 """
 
 from __future__ import annotations

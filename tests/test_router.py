@@ -24,7 +24,7 @@ from auto_model_router import (  # noqa: E402
     route,
     summarize_usage,
 )
-from demo.classify import EXAMPLES, LOW_CONFIDENCE, classify, picker_action  # noqa: E402
+from demo.classify import EXAMPLES, LOW_CONFIDENCE, classify, load_tier_map, picker_action  # noqa: E402
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from detect_active import detect_active  # noqa: E402
@@ -158,6 +158,61 @@ class GateTests(unittest.TestCase):
         decision = evaluate_tool(state, {"tool_name": "Bash", "tool_input": {"command": "echo hi"}})
         self.assertFalse(decision["allowed"])
 
+    def test_gemini_before_tool_blocks_then_allows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            gate_file = Path(tmp) / "gate.json"
+            suggested = _hook(
+                {"hook_event_name": "BeforeAgent", "prompt": "make it better"},
+                gate_file,
+            )
+            self.assertEqual(suggested.returncode, 0, suggested.stderr)
+            state = json.loads(gate_file.read_text(encoding="utf-8"))
+            self.assertEqual(state["tier"], "standard")
+            self.assertFalse(state["confirmed"])
+
+            forged = _hook(
+                {
+                    "hook_event_name": "BeforeTool",
+                    "tool_name": "run_shell_command",
+                    "prompt": "confirm",
+                    "tool_input": {
+                        "command": "python3 scripts/confirm_gate.py --confirm max",
+                        "confirmed": True,
+                    },
+                },
+                gate_file,
+            )
+            self.assertEqual(forged.returncode, 2, forged.stdout)
+            forged_body = json.loads(forged.stdout)
+            self.assertEqual(forged_body["decision"], "deny")
+            self.assertEqual(forged_body["permission"], "deny")
+            self.assertFalse(json.loads(gate_file.read_text(encoding="utf-8"))["confirmed"])
+
+            confirmed = _hook(
+                {"hook_event_name": "BeforeAgent", "prompt": "confirm"},
+                gate_file,
+            )
+            self.assertEqual(confirmed.returncode, 0, confirmed.stderr)
+            allowed = _hook(
+                {
+                    "hook_event_name": "BeforeTool",
+                    "tool_name": "run_shell_command",
+                    "tool_input": {"command": "echo hi"},
+                },
+                gate_file,
+            )
+            self.assertEqual(allowed.returncode, 0, allowed.stderr)
+            allowed_body = json.loads(allowed.stdout)
+            self.assertEqual(allowed_body["decision"], "allow")
+            self.assertEqual(allowed_body["permission"], "allow")
+
+    def test_gemini_hook_snippet_wires_same_gate(self) -> None:
+        data = json.loads((ROOT / "hooks" / "gemini.settings.snippet.json").read_text(encoding="utf-8"))
+        self.assertIn("BeforeAgent", data["hooks"])
+        self.assertIn("BeforeTool", data["hooks"])
+        tool_cmd = data["hooks"]["BeforeTool"][0]["hooks"][0]["command"]
+        self.assertIn("confirm_gate.py", tool_cmd)
+
 
 class ConfidenceTests(unittest.TestCase):
     def test_examples_keep_their_tiers_and_gates(self) -> None:
@@ -208,6 +263,17 @@ class ConfidenceTests(unittest.TestCase):
         heavier = picker_action("fast", mapping, current_tier="max")
         self.assertIn("<your-fast-model>", heavier)
         self.assertIn("heavier than needed", heavier)
+
+    def test_gemini_tier_map_uses_model_and_family(self) -> None:
+        mapping = load_tier_map(str(ROOT / "integrations" / "gemini-tier-map.example.json"))
+        self.assertEqual(mapping["fast"]["model"], "<your-flash-or-flash-lite>")
+        self.assertEqual(mapping["standard"]["family"], "Pro")
+        heavier = picker_action("fast", mapping, current_tier="max", host="Gemini")
+        self.assertIn("<your-flash-or-flash-lite>", heavier)
+        self.assertIn("Gemini", heavier)
+        self.assertIn("heavier than needed", heavier)
+        family_only = picker_action("max", {"max": {"family": "thinking / deep"}}, host="Gemini")
+        self.assertIn("thinking / deep", family_only)
 
 
 class UsageTests(unittest.TestCase):

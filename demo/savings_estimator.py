@@ -162,7 +162,7 @@ def human_summary(result: Dict[str, Any]) -> str:
         f"({result['override_count']}/{result['task_count']})"
     )
     lines.extend(result.get("notes") or [])
-    lines.append("No Cursor, Claude Code, Codex, or billing API was accessed.")
+    lines.append("No Cursor, Claude Code, Codex, Gemini, or billing API was accessed.")
     if result.get("price_table_status") == "missing_rates":
         lines.append(
             "Token rows stayed unpriced. Copy demo/prices.example.json, fill per-million rates, "

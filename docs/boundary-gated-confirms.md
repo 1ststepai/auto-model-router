@@ -61,6 +61,8 @@ Agent: Auto suggests standard — mixed rename + multi-file signals sit near a t
 python3 demo/classify.py --suggest "Rename the variable foo to bar in utils.py"
 python3 demo/classify.py --suggest --map integrations/cursor-tier-map.example.json \
   --current-tier max "Rename the variable foo to bar in utils.py"
+python3 demo/classify.py --suggest --map integrations/gemini-tier-map.example.json \
+  --host Gemini --current-tier max "Rename the variable foo to bar in utils.py"
 python3 demo/classify.py --suggest "Review this auth change for XSS and credential leaks"
 python3 demo/classify.py --suggest "Wire up a CRUD endpoint using the existing handler pattern"
 python3 demo/classify.py --examples
@@ -72,5 +74,5 @@ JSON includes `tier`, `gate`, `near_boundary`, `high_risk`, `reversible`, `confi
 
 - Not a billing API, savings guarantee, or vendor affiliation
 - Not a production routing proxy and not a silent takeover of Cursor Auto
-- Not a live Cursor/Claude/Codex usage or quota meter
+- Not a live Cursor/Claude/Codex/Gemini usage or quota meter
 - Not trained ML and not a security control

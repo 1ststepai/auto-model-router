@@ -30,6 +30,8 @@ Usage
   python3 classify.py --suggest "debug why auth fails intermittently"
   python3 classify.py --suggest --map integrations/cursor-tier-map.example.json \\
       --current-tier max "rename foo to bar"
+  python3 classify.py --suggest --map integrations/gemini-tier-map.example.json \\
+      --host Gemini --current-tier max "rename foo to bar"
   python3 classify.py --examples
 """
 
@@ -246,7 +248,13 @@ def picker_action(
 ) -> str:
     """Concrete picker/effort sentence from a local map. Never invents a vendor name."""
     entry = (mapping or {}).get(tier) or {}
-    picker = str(entry.get("picker") or "").strip() or f"your mapped {tier} model"
+    picker = str(
+        entry.get("picker")
+        or entry.get("model")
+        or entry.get("label")
+        or entry.get("family")
+        or ""
+    ).strip() or f"your mapped {tier} model"
     effort = str(entry.get("effort") or "").strip()
     target = f"{picker} / {effort} effort" if effort else picker
 
@@ -512,6 +520,7 @@ def suggest_line(
     result=None,
     mapping: Optional[Dict[str, dict]] = None,
     current_tier: Optional[str] = None,
+    host: str = "Cursor",
 ) -> str:
     """Human-facing Auto suggestion for the confirm/override UX."""
     result = result or classify(task)
@@ -521,7 +530,7 @@ def suggest_line(
     if len(short_why) > 120:
         short_why = short_why[:117].rsplit(" ", 1)[0] + "…"
     gate = result.get("gate", "confirm")
-    action = picker_action(tier, mapping, current_tier) if mapping is not None else ""
+    action = picker_action(tier, mapping, current_tier, host=host) if mapping is not None else ""
     if gate == "auto_continue":
         line = f"Auto continues on **{tier}** — {short_why}."
     elif gate == "hard_gate":
@@ -549,14 +558,16 @@ def print_suggestion(
     task: str,
     mapping: Optional[Dict[str, dict]] = None,
     current_tier: Optional[str] = None,
+    host: str = "Cursor",
 ) -> dict:
     result = classify(task)
     if mapping is not None:
         result = dict(result)
-        result["picker_action"] = picker_action(result["tier"], mapping, current_tier)
+        result["picker_action"] = picker_action(result["tier"], mapping, current_tier, host=host)
         if current_tier:
             result["current_tier"] = current_tier
-    print(suggest_line(task, result, mapping=mapping, current_tier=current_tier))
+        result["host"] = host
+    print(suggest_line(task, result, mapping=mapping, current_tier=current_tier, host=host))
     print("--- JSON ---")
     print(json.dumps(result, indent=2))
     return result
@@ -648,6 +659,7 @@ def main(argv: List[str]) -> int:
     try:
         map_path = _take_option(args, ("--map",))
         current_tier = _take_option(args, ("--current-tier",))
+        host = _take_option(args, ("--host",)) or "Cursor"
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -674,7 +686,7 @@ def main(argv: List[str]) -> int:
         if sys.stdin.isatty():
             print(
                 "Usage: classify.py [--map FILE] [--current-tier TIER] "
-                "[--suggest] <task>\n"
+                "[--host NAME] [--suggest] <task>\n"
                 "Or pipe a task description on stdin.",
                 file=sys.stderr,
             )
@@ -682,7 +694,7 @@ def main(argv: List[str]) -> int:
         task = sys.stdin.read()
 
     if suggest or mapping is not None:
-        print_suggestion(task, mapping=mapping, current_tier=current_tier)
+        print_suggestion(task, mapping=mapping, current_tier=current_tier, host=host)
         return 0
 
     print(json.dumps(classify(task), indent=2))
