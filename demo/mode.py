@@ -7,13 +7,13 @@ from __future__ import annotations
 from typing import List, Tuple
 
 MODE_STEERING_PATTERNS: List[Tuple[str, str]] = [
-    (r"\\b(steer|iterate|tweak|adjust|review this|look at this|in this chat|walk me through)\\b", "interactive steering"),
-    (r"\\b(blocking|blocking on|can't proceed|need this now|right now|while I wait)\\b", "blocking dependency"),
+    (r"\b(steer|iterate|tweak|adjust|review this|look at this|in this chat|walk me through)\b", "interactive steering"),
+    (r"\b(blocking|blocking on|can't proceed|need this now|right now|while I wait)\b", "blocking dependency"),
 ]
 
 MODE_CLOUD_PATTERNS: List[Tuple[str, str]] = [
-    (r"\\b(overnight|background|while I am away|unattended|don't wait|do not wait)\\b", "unattended batch"),
-    (r"\\b(long[- ]running|hours? of work|full migration|entire codebase|overnight refactor)\\b", "long-running"),
+    (r"\b(overnight|background|while I am away|unattended|don't wait|do not wait)\b", "unattended batch"),
+    (r"\b(long[- ]running|hours? of work|full migration|entire codebase|overnight refactor)\b", "long-running"),
 ]
 
 
@@ -24,6 +24,7 @@ def decide_mode(
     reversible: bool,
     signals: List[str],
 ) -> Tuple[str, str]:
+    """Pick local vs cloud. Does not launch agents."""
     if high_risk:
         return "local", "high-risk work stays in-session"
     if any(s in ("interactive steering", "blocking dependency") for s in signals):
