@@ -28,15 +28,6 @@ Suggestion line shape:
 Auto suggests standard / local — multi-file known pattern. Confirm to run…
 ```
 
-## Apply the remaining wiring
-
-Branch `feat/local-cloud-mode` includes `demo/mode.py`.
-Wire it in `demo/classify.py`:
-
-1. Import `MODE_STEERING_PATTERNS`, `MODE_CLOUD_PATTERNS`, and `decide_mode` from `demo.mode`.
-2. Match those patterns after the existing escalation signals.
-3. Call `decide_mode(...)` after `decide_gate`.
-4. Add `mode` and `mode_reason` to the returned dict (including the empty-task case).
-5. Include `/ {mode}` in `suggest_line`.
+`demo/classify.py` imports `MODE_STEERING_PATTERNS`, `MODE_CLOUD_PATTERNS`, and `decide_mode` from `demo/mode.py`, matches them after the escalation signals, and calls `decide_mode` after `decide_gate`.
 
 Helper: `python3 demo/classify.py --examples`

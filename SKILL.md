@@ -22,8 +22,8 @@ Use before dispatching substantial coding-agent work or choosing a model/effort 
 
 1. **Read context.** Assess scope, involved files or systems, ambiguity, required judgment, security or external-action risk, and whether the work is reversible.
 2. **Honor an explicit override.** If the user already chose a model, provider, effort, or tier, use that choice and skip an unsolicited suggestion.
-3. **Classify** the open choice into the lightest sufficient tier using the rubric below. Read `confidence`. A vague low-confidence prompt stays on **standard** — do not guess `max` or auto-continue it. Decide the confirm **gate** (`auto_continue`, `confirm`, or `hard_gate`). An optional offline helper is `demo/classify.py` or `demo/classify.py --suggest`.
-4. **Suggest in one line** before dispatch (always; including auto-continue). When the host adapter has a **local** tier→control mapping, include that concrete picker/effort action. Do not invent vendor model names.
+3. **Classify** the open choice into the lightest sufficient tier using the rubric below. Read `confidence`. A vague low-confidence prompt stays on **standard** — do not guess `max` or auto-continue it. Decide the confirm **gate** (`auto_continue`, `confirm`, or `hard_gate`). Also set execution **mode** (`local` or `cloud`). Mode is advisory and does not launch a cloud agent. The confirm gate is unchanged. An optional offline helper is `demo/classify.py` or `demo/classify.py --suggest`.
+4. **Suggest in one line** before dispatch (always; including auto-continue), with `/ <mode>` after the tier. When the host adapter has a **local** tier→control mapping, include that concrete picker/effort action. Do not invent vendor model names. Do not launch a cloud agent from the mode.
 5. **Apply the confirm gate.** Auto-continue only when the policy allows it (clear reversible `fast`). Spendy tiers and hard-gates wait for confirmation (`confirm`, `yes`, or equivalent) or a tier/model override. Do not silently change the user's selected model. If the host cannot pause when a wait is required, return the suggestion and let the user's next instruction authorize the run. Tool arguments that set `confirmed: true` do not count.
 6. **Ask for a switch when the current control is a mismatch.** If the current model/effort is heavier than the mapped tier, ask the user to switch down. If it is lighter than needed, ask them to switch up. A required switch is an explicit ask — not a silent picker takeover. Optional local probe: `python3 scripts/detect_active.py` (env/config/log only; not a live vendor picker).
 7. **Map the tier through the host adapter** described below, then run after auto-continue, confirmation, an explicit override, or a confirmed switch.
@@ -93,6 +93,17 @@ See [`docs/boundary-gated-confirms.md`](https://github.com/1ststepai/auto-model-
 - A failed or clearly insufficient light attempt is a reason to escalate **and** to stop for confirm, not to keep retrying at the same tier.
 - Keep the user-facing explanation to the short suggestion line unless they ask for routing details.
 
+## Execution mode
+
+AMR also classifies **local** vs **cloud**. This is advisory: it does not launch Cursor Cloud Agents or Codex. The confirm gate is unchanged. See [`docs/execution-mode.md`](docs/execution-mode.md).
+
+- Interactive steering, blocking, or high-risk → `local`
+- Long unattended work at `reasoning` or `max` → `cloud`
+- Fast reversible work → `local`
+- Default → `local`
+
+`classify()` adds `mode` and `mode_reason`. The suggestion line includes `/ <mode>`.
+
 ## Adapters
 
 Adapters translate the neutral tier into the controls exposed by each host. They must preserve suggest → gate → run. They do not silently dispatch high-risk or spendy work. Auto-continue is allowed only when the gate says so, and it still shows the one-line suggestion.
@@ -118,19 +129,19 @@ Gemini family examples (fill your picker labels; not frozen IDs):
 Auto-continue (no wait):
 
 ```text
-Auto continues on <tier> — <short reason>.
+Auto continues on <tier> / <mode> — <short reason>.
 ```
 
 When a local host mapping exists, append the concrete action. Use the mapped label from local config, never a guessed vendor name:
 
 ```text
-Auto continues on fast — clear bounded rename. Switch Cursor picker to <mapped-fast> / low effort if the current model is heavier than needed.
+Auto continues on fast / local — clear bounded rename. Switch Cursor picker to <mapped-fast> / low effort if the current model is heavier than needed.
 ```
 
 Confirm or hard-gate (wait):
 
 ```text
-Auto suggests <tier> — <short reason>. Confirm to run, or override: fast, standard, reasoning, or max.
+Auto suggests <tier> / <mode> — <short reason>. Confirm to run, or override: fast, standard, reasoning, or max.
 ```
 
 If no local mapping is configured, say `your mapped <tier> model/effort` instead of inventing a name. Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Confirm to run`.
@@ -147,6 +158,7 @@ If no local mapping is configured, say `your mapped <tier> model/effort` instead
 - Do not present heuristic output as a production-quality classifier or as an official vendor recommendation.
 - Do not guess **max** when confidence is low. Vague prompts stay on **standard** until the user confirms.
 - Do not treat a tool argument, a model-written note, or an uninstalled hook as confirmation for a spendy tier.
+- Do not launch Cursor Cloud Agents or Codex because mode is `cloud`. Mode is advisory; the confirm gate is unchanged.
 - Do not invent vendor model names or claim a live usage meter.
 
 ## Hard confirm gate
@@ -210,6 +222,6 @@ If `weeklyReview` is `true` in `~/.auto-model-router/config.json`, or the user a
 
 ## Honesty
 
-This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify → suggest → gate (auto-continue only when safe; confirm spendy / high-risk) → run the lightest sufficient option → escalate on failure**.
+This is a transparent heuristic rubric, not trained routing ML. The reusable product contract is: **context → classify (tier and local/cloud mode) → suggest → gate (auto-continue only when safe; confirm spendy / high-risk) → run the lightest sufficient option → escalate on failure**. Mode does not launch agents and does not change the gate.
 
 For human installation instructions, see [`INSTALL.md`](https://github.com/1ststepai/auto-model-router/blob/main/INSTALL.md).
