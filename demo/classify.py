@@ -43,6 +43,11 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+try:
+    from demo.mode import MODE_STEERING_PATTERNS, MODE_CLOUD_PATTERNS, decide_mode
+except ImportError:  # python3 demo/classify.py
+    from mode import MODE_STEERING_PATTERNS, MODE_CLOUD_PATTERNS, decide_mode
+
 # ---------------------------------------------------------------------------
 # Signal patterns (prototype heuristics — intentionally simple & readable)
 # ---------------------------------------------------------------------------
@@ -300,6 +305,12 @@ def classify(task: str) -> dict:
     """Return tier, gate, confidence, and heuristic confirm-gate fields."""
     task = (task or "").strip()
     if not task:
+        mode, mode_reason = decide_mode(
+            tier="fast",
+            high_risk=False,
+            reversible=False,
+            signals=["empty input"],
+        )
         return {
             "tier": "fast",
             "reason": "Empty task; defaulting to lightest tier.",
@@ -312,6 +323,8 @@ def classify(task: str) -> dict:
             "near_boundary": True,
             "gate": "confirm",
             "gate_reason": "empty or unspecified task; not a clear auto-continue case",
+            "mode": mode,
+            "mode_reason": mode_reason,
         }
 
     words = len(task.split())
@@ -322,6 +335,8 @@ def classify(task: str) -> dict:
     hard_s = _match_signals(task, HARD_GATE_PATTERNS)
     user_confirm_s = _match_signals(task, USER_CONFIRM_PATTERNS)
     escalation_s = _match_signals(task, ESCALATION_PATTERNS)
+    steering_s = _match_signals(task, MODE_STEERING_PATTERNS)
+    cloud_s = _match_signals(task, MODE_CLOUD_PATTERNS)
 
     signals: List[str] = []
     # Length alone must not force max. Only a vague brief (no tier patterns) counts.
@@ -461,6 +476,9 @@ def classify(task: str) -> dict:
         signals.extend(label for label in user_confirm_s if label not in signals)
     if escalation:
         signals.extend(label for label in escalation_s if label not in signals)
+    for label in steering_s + cloud_s:
+        if label not in signals:
+            signals.append(label)
 
     gate, gate_reason = decide_gate(
         tier=tier,
@@ -469,6 +487,12 @@ def classify(task: str) -> dict:
         near_boundary=near_boundary,
         user_requested_confirm=user_requested_confirm,
         escalation=escalation,
+    )
+    mode, mode_reason = decide_mode(
+        tier=tier,
+        high_risk=high_risk,
+        reversible=reversible,
+        signals=signals,
     )
 
     return {
@@ -483,6 +507,8 @@ def classify(task: str) -> dict:
         "near_boundary": near_boundary,
         "gate": gate,
         "gate_reason": gate_reason,
+        "mode": mode,
+        "mode_reason": mode_reason,
     }
 
 
@@ -530,18 +556,19 @@ def suggest_line(
     if len(short_why) > 120:
         short_why = short_why[:117].rsplit(" ", 1)[0] + "…"
     gate = result.get("gate", "confirm")
+    mode = result.get("mode") or "local"
     action = picker_action(tier, mapping, current_tier, host=host) if mapping is not None else ""
     if gate == "auto_continue":
-        line = f"Auto continues on **{tier}** — {short_why}."
+        line = f"Auto continues on **{tier}** / {mode} — {short_why}."
     elif gate == "hard_gate":
         line = (
-            f"Auto suggests **{tier}** — {short_why}. "
+            f"Auto suggests **{tier}** / {mode} — {short_why}. "
             "Confirm required (high-risk / hard to undo), or override "
             "(fast | standard | reasoning | max)."
         )
     else:
         line = (
-            f"Auto suggests **{tier}** — {short_why}. "
+            f"Auto suggests **{tier}** / {mode} — {short_why}. "
             "Confirm to run, or override (fast | standard | reasoning | max)."
         )
     if result.get("downshifted_from"):
