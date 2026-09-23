@@ -27,10 +27,10 @@ For a user-wide copy, use `~/.claude/skills/auto-model-router/SKILL.md` on macOS
 1. Classify the request using the neutral four-tier rubric and the confirm gate.
 2. Tell the user the suggested tier and short reason before starting model work. Auto-continue only clear reversible `fast`.
 3. Wait for `confirm` or an explicit tier/model override on spendy or high-risk work. Optional: merge [`../hooks/claude.settings.snippet.json`](../hooks/claude.settings.snippet.json) into `.claude/settings.json`.
-4. Select the configured Claude model or effort setting for that tier, then run.
+4. Name and select the concrete Claude model/effort for that tier. Prefer a project override; otherwise use `claude-haiku-4-5-20251001` for fast, `claude-sonnet-5/low` for standard, `claude-opus-5/high` for reasoning, and `claude-opus-5/max` for max after checking host availability.
 5. After a failed light attempt, stop for confirm, state that you are escalating, and continue with a stronger configured model/effort.
 
-Do not bake specific Claude model names into the portable skill; map the tiers to the models enabled for the project.
+The defaults are recorded in [`provider-tier-defaults.json`](provider-tier-defaults.json). Live host inventory wins; never recommend a retired or unavailable model.
 
 ## Verify
 

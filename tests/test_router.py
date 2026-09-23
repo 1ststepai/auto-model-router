@@ -275,12 +275,15 @@ class ConfidenceTests(unittest.TestCase):
         self.assertIn("<your-fast-model>", heavier)
         self.assertIn("heavier than needed", heavier)
 
-    def test_gemini_tier_map_uses_model_and_family(self) -> None:
+    def test_gemini_tier_map_uses_specific_models_and_thinking(self) -> None:
         mapping = load_tier_map(str(ROOT / "integrations" / "gemini-tier-map.example.json"))
-        self.assertEqual(mapping["fast"]["model"], "<your-flash-or-flash-lite>")
-        self.assertEqual(mapping["standard"]["family"], "Pro")
+        self.assertEqual(mapping["fast"]["model"], "gemini-3.5-flash-lite")
+        self.assertEqual(mapping["fast"]["thinking_level"], "minimal")
+        self.assertEqual(mapping["standard"]["model"], "gemini-3.8-flash")
+        self.assertEqual(mapping["reasoning"]["model"], "gemini-3.1-pro-preview")
+        self.assertEqual(mapping["max"]["research_only_alternative"], "deep-research-max-preview-04-2026")
         heavier = picker_action("fast", mapping, current_tier="max", host="Gemini")
-        self.assertIn("<your-flash-or-flash-lite>", heavier)
+        self.assertIn("gemini-3.5-flash-lite", heavier)
         self.assertIn("Gemini", heavier)
         self.assertIn("heavier than needed", heavier)
         family_only = picker_action("max", {"max": {"family": "thinking / deep"}}, host="Gemini")

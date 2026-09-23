@@ -6,7 +6,7 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![Python demo](https://img.shields.io/badge/demo-Python%203-3776AB.svg?logo=python&logoColor=white)](demo/classify.py)
 
-**A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, Gemini, or any agent with custom instructions or skills**—without requiring vendor-specific model names or APIs.
+**A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, Gemini, or any agent with custom instructions or skills**. Codex, Claude, and Gemini recommendations name a concrete checked model and effort; live host inventory and project overrides take precedence.
 
 An open-source, provider-agnostic skill for routing coding-agent work to the lightest model or effort tier that can do it well. Product page: [1stStep Auto Model Router](https://www.1ststep.ai/tools/auto-model-router/).
 

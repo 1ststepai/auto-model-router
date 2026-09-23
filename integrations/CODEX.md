@@ -26,10 +26,10 @@ Some older/configured installs also support `$CODEX_HOME/skills` (normally `~/.c
 1. Read task context and classify it as `fast`, `standard`, `reasoning`, or `max`.
 2. Present the suggestion and one-line reason to the user. Auto-continue only clear reversible `fast`.
 3. Wait for confirmation or a tier/model/effort override on spendy or high-risk work. Optional: copy [`../hooks/codex.hooks.json`](../hooks/codex.hooks.json) and trust it in `/hooks`.
-4. Map the gated tier to the Codex model and/or reasoning effort configured for the project, then run.
+4. Map the gated tier to a concrete Codex model/effort pair and name it in the suggestion. Prefer a project override; otherwise use `gpt-6-luna/none` for fast, `gpt-6-sol/medium` for standard, `gpt-6-astra/high` for reasoning, and `gpt-6-astra/max` for max after checking the session inventory.
 5. Escalate toward `reasoning` or `max` after an insufficient light attempt: stop for confirm and explain the change once.
 
-Tier labels are deliberately not Codex product names. Keep the mapping in project instructions so it can evolve with the available Codex models.
+The defaults are recorded in [`provider-tier-defaults.json`](provider-tier-defaults.json). Live session inventory wins; never recommend an unsupported pair.
 
 ## Verify
 
