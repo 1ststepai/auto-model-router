@@ -221,6 +221,13 @@ SKILL.md cannot magically open a GUI when Cursor, Claude, or Gemini CLI merely l
 
 Config shape: `{ "openDashboardOnApply": true, "weeklyReview": false }`. Optional keys `currentHost`, `currentTier`, and `currentModel` are local declarations for `scripts/detect_active.py` — they are not live vendor meters. Weekly review is **opt-in** (`--enable-weekly-review` / `-EnableWeeklyReview`); it never runs unless enabled or `--force` is passed.
 
+Apply updates `~/.auto-model-router/install-receipt.json` locally with apply
+timestamps, apply count, and installed host names. The installer sends no
+telemetry and stores no prompt, code, account, machine, customer, or credential
+data. `--share-adoption` / `-ShareAdoption` may open the public GitHub adoption
+form only after the user explicitly chooses that flag. Opening is not
+submission; never submit the form or claim adoption for the user.
+
 When the user just installed the skill, says they applied it, or asks to apply / show the savings dashboard:
 
 1. Tell them the dashboard lives at `~/.auto-model-router/demo/dashboard.html` (Windows: `%USERPROFILE%\.auto-model-router\demo\dashboard.html`), or at `demo/dashboard.html` in this repo if they have not run apply yet.

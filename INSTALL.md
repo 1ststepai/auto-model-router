@@ -116,6 +116,26 @@ From a clone of this repository:
 .\scripts\apply.ps1 -Open
 ```
 
+Every apply updates a local-only receipt at
+`~/.auto-model-router/install-receipt.json` (Windows:
+`%USERPROFILE%\.auto-model-router\install-receipt.json`). It records apply
+timestamps, apply count, and installed host names. The installer does not send
+the receipt or collect prompts, source code, account details, machine IDs,
+customer data, or credentials.
+
+Real adoption can be shared explicitly:
+
+```bash
+./scripts/apply.sh --share-adoption
+```
+
+```powershell
+.\scripts\apply.ps1 -ShareAdoption
+```
+
+This only opens a public GitHub form. The user must review and submit it; the
+installer never posts on their behalf.
+
 **Preferences** live in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`):
 
 ```json

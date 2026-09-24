@@ -23,6 +23,10 @@ Weekly review (opt-in; local usage log only — not vendor billing):
   --install-schedule       Install a user cron/launchd-style weekly job (explicit opt-in)
   --uninstall-schedule     Remove the weekly schedule installed by this script
 
+Adoption evidence (explicit opt-in):
+  --share-adoption         Open a public GitHub adoption form after applying.
+                           Nothing is submitted until you review and submit it.
+
 Preference file: ~/.auto-model-router/config.json
   { "openDashboardOnApply": true, "weeklyReview": false }
 
@@ -35,6 +39,7 @@ FLAG_OPEN=""
 FLAG_WEEKLY=""
 INSTALL_SCHEDULE=0
 UNINSTALL_SCHEDULE=0
+SHARE_ADOPTION=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,6 +65,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --uninstall-schedule)
       UNINSTALL_SCHEDULE=1
+      shift
+      ;;
+    --share-adoption)
+      SHARE_ADOPTION=1
       shift
       ;;
     -h|--help)
@@ -90,7 +99,9 @@ DEMO_DEST="$AMR_HOME/demo"
 LOGS_DEST="$AMR_HOME/logs"
 CONFIG_FILE="$AMR_HOME/config.json"
 WEEKLY_DEST="$AMR_HOME/weekly_review.py"
+RECEIPT_FILE="$AMR_HOME/install-receipt.json"
 CRON_MARKER="# auto-model-router-weekly-review"
+ADOPTION_URL="https://github.com/1ststepai/auto-model-router/issues/new?template=adoption.yml"
 
 # Merge one boolean key into config.json without wiping sibling keys.
 set_config_bool() {
@@ -140,6 +151,38 @@ if path.is_file():
     except (OSError, json.JSONDecodeError):
         pass
 print(1 if val else 0)
+PY
+}
+
+update_install_receipt() {
+  mkdir -p "$AMR_HOME"
+  python3 - "$RECEIPT_FILE" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+first = now
+count = 0
+if path.is_file():
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            first = str(data.get("firstAppliedAt") or now)
+            count = int(data.get("applyCount") or 0)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+receipt = {
+    "schemaVersion": 1,
+    "firstAppliedAt": first,
+    "lastAppliedAt": now,
+    "applyCount": count + 1,
+    "installedHosts": ["cursor", "claude", "codex", "agents", "gemini"],
+    "installerTransmitted": False,
+}
+path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+print(f"  local install receipt → {path} (not transmitted)")
 PY
 }
 
@@ -259,6 +302,8 @@ else
   echo "  kept existing log → $USAGE_LOG"
 fi
 
+update_install_receipt
+
 # Persist preference flags (merge into config.json).
 if [[ -n "$FLAG_OPEN" ]]; then
   if [[ "$FLAG_OPEN" -eq 1 ]]; then
@@ -313,6 +358,7 @@ echo "Success: auto-model-router applied."
 echo "  Skills: ~/.cursor, ~/.claude, ~/.codex, ~/.agents, ~/.gemini (under skills/auto-model-router/)"
 echo "  Dashboard: $DASHBOARD"
 echo "  Config: $CONFIG_FILE"
+echo "  Adoption: local receipt only; no telemetry was sent."
 if [[ "$SHOULD_OPEN" -eq 0 ]]; then
   echo "  Skipped opening the browser (--no-open or openDashboardOnApply=false)."
   echo "  Open the dashboard path above manually when you want it,"
@@ -332,3 +378,23 @@ fi
 echo
 echo "Note: Cursor/Claude/Gemini loading SKILL.md alone cannot open a GUI."
 echo "      \"Apply\" means running this script so the dashboard auto-starts."
+if [[ "$SHARE_ADOPTION" -eq 1 ]]; then
+  adoption_opened=0
+  case "$(uname -s)" in
+    Darwin)
+      if open "$ADOPTION_URL" 2>/dev/null; then adoption_opened=1; fi
+      ;;
+    *)
+      if command -v xdg-open >/dev/null 2>&1 && xdg-open "$ADOPTION_URL" >/dev/null 2>&1; then
+        adoption_opened=1
+      fi
+      ;;
+  esac
+  if [[ "$adoption_opened" -eq 1 ]]; then
+    echo "  Opened the optional public adoption form. Review it, then submit it yourself."
+  else
+    echo "  Could not open the optional adoption form: $ADOPTION_URL"
+  fi
+else
+  echo "  Optional: re-run with --share-adoption to open the public adoption form."
+fi
