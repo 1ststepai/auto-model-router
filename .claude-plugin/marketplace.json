@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "auto-model-router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "GitHub marketplace for the Auto Model Router Claude Code plugin. Add this repository — it is not an Anthropic official catalog listing.",
   "owner": {
     "name": "1ststepai",
@@ -12,7 +12,7 @@
       "name": "auto-model-router",
       "source": "./",
       "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": {
         "name": "1ststepai",
         "url": "https://github.com/1ststepai"

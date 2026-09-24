@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "auto-model-router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
   "author": {
     "name": "1ststepai",
@@ -16,7 +16,9 @@
     "cursor",
     "claude-code",
     "codex",
-    "gemini"
+    "gemini",
+    "grok",
+    "grok-bot"
   ],
   "extensions": {
     "com.openai": {
@@ -26,6 +28,11 @@
         "longDescription": "Loads the portable auto-model-router skill: classify each task as fast, standard, reasoning, or max, show the suggestion, auto-continue only clear reversible fast work, and wait for confirmation on spendy or high-risk work. Does not change vendor billing APIs or guarantee savings.",
         "developerName": "1ststepai",
         "category": "Productivity",
+        "capabilities": [
+          "Analysis",
+          "Planning"
+        ],
+        "defaultPrompt": "Choose the lightest sufficient model or effort tier for this task and apply the required confirmation gate.",
         "websiteURL": "https://github.com/1ststepai/auto-model-router",
         "composerIcon": "./assets/logo.png",
         "logo": "./assets/logo.png"

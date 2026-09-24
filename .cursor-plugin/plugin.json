@@ -1,7 +1,7 @@
 {
   "name": "auto-model-router",
   "displayName": "Auto Model Router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
   "author": {
     "name": "1ststepai"
@@ -13,7 +13,9 @@
   "keywords": [
     "model-routing",
     "agent-skills",
-    "usage"
+    "usage",
+    "grok",
+    "grok-bot"
   ],
   "category": "productivity",
   "skills": "./skills"

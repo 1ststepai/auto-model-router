@@ -1,6 +1,6 @@
 {
   "name": "auto-model-router",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier (fast, standard, reasoning, or max).",
   "author": {
     "name": "1ststepai",
@@ -12,7 +12,9 @@
   "keywords": [
     "model-routing",
     "agent-skills",
-    "usage"
+    "usage",
+    "grok",
+    "grok-bot"
   ],
   "skills": "./skills/",
   "interface": {
@@ -21,6 +23,11 @@
     "longDescription": "Loads the portable auto-model-router skill: classify each task as fast, standard, reasoning, or max, show the suggestion, auto-continue only clear reversible fast work, and wait for confirmation on spendy or high-risk work. Does not change vendor billing APIs or guarantee savings.",
     "developerName": "1ststepai",
     "category": "Productivity",
+    "capabilities": [
+      "Analysis",
+      "Planning"
+    ],
+    "defaultPrompt": "Choose the lightest sufficient model or effort tier for this task and apply the required confirmation gate.",
     "websiteURL": "https://github.com/1ststepai/auto-model-router",
     "composerIcon": "./assets/logo.png",
     "logo": "./assets/logo.png"
