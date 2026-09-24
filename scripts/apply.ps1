@@ -110,8 +110,15 @@ function Set-ConfigBool {
 function Install-Skill {
   param([string]$DestDir)
   New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
-  Copy-Item -LiteralPath $SkillSrc -Destination (Join-Path $DestDir "SKILL.md") -Force
-  Write-Host "  installed skill → $(Join-Path $DestDir 'SKILL.md')"
+  $destFile = Join-Path $DestDir "SKILL.md"
+  if ((Test-Path -LiteralPath $destFile) -and
+      ((Get-FileHash -Algorithm SHA256 -LiteralPath $SkillSrc).Hash -eq
+       (Get-FileHash -Algorithm SHA256 -LiteralPath $destFile).Hash)) {
+    Write-Host "  skill already current → $destFile"
+    return
+  }
+  Copy-Item -LiteralPath $SkillSrc -Destination $destFile -Force
+  Write-Host "  installed skill → $destFile"
 }
 
 function Install-WeeklySchedule {
@@ -151,6 +158,7 @@ Write-Host "Applying auto-model-router..."
 Install-Skill (Join-Path $HomeDir ".cursor\skills\auto-model-router")
 Install-Skill (Join-Path $HomeDir ".claude\skills\auto-model-router")
 Install-Skill (Join-Path $HomeDir ".codex\skills\auto-model-router")
+Install-Skill (Join-Path $HomeDir ".agents\skills\auto-model-router")
 Install-Skill (Join-Path $HomeDir ".gemini\skills\auto-model-router")
 
 New-Item -ItemType Directory -Force -Path $DemoDest | Out-Null
@@ -238,7 +246,7 @@ if ($ShouldOpen) {
 
 Write-Host ""
 Write-Host "Success: auto-model-router applied."
-Write-Host "  Skills: %USERPROFILE%\.cursor, .claude, .codex, .gemini (under skills\auto-model-router\)"
+Write-Host "  Skills: %USERPROFILE%\.cursor, .claude, .codex, .agents, .gemini (under skills\auto-model-router\)"
 Write-Host "  Dashboard: $Dashboard"
 Write-Host "  Config: $ConfigFile"
 if (-not $ShouldOpen) {
