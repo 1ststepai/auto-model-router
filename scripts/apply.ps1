@@ -8,6 +8,7 @@ param(
   [switch]$DisableWeeklyReview,
   [switch]$InstallSchedule,
   [switch]$UninstallSchedule,
+  [switch]$ShareAdoption,
   [switch]$Help
 )
 
@@ -27,6 +28,10 @@ Weekly review (opt-in; local usage log only — not vendor billing):
   -DisableWeeklyReview    Set weeklyReview=false
   -InstallSchedule        Install a user Task Scheduler weekly job (explicit opt-in)
   -UninstallSchedule      Remove the weekly task installed by this script
+
+Adoption evidence (explicit opt-in):
+  -ShareAdoption          Open a public GitHub adoption form after applying.
+                          Nothing is submitted until you review and submit it.
 
 Preference file: `$env:USERPROFILE\.auto-model-router\config.json
   { "openDashboardOnApply": true, "weeklyReview": false }
@@ -63,7 +68,9 @@ $DemoDest = Join-Path $AmrHome "demo"
 $LogsDest = Join-Path $AmrHome "logs"
 $ConfigFile = Join-Path $AmrHome "config.json"
 $WeeklyDest = Join-Path $AmrHome "weekly_review.py"
+$ReceiptFile = Join-Path $AmrHome "install-receipt.json"
 $TaskName = "AutoModelRouterWeeklyReview"
+$AdoptionUrl = "https://github.com/1ststepai/auto-model-router/issues/new?template=adoption.yml"
 
 function Read-Config {
   $cfg = [ordered]@{
@@ -119,6 +126,48 @@ function Install-Skill {
   }
   Copy-Item -LiteralPath $SkillSrc -Destination $destFile -Force
   Write-Host "  installed skill → $destFile"
+}
+
+function Update-InstallReceipt {
+  $nowValue = [DateTimeOffset]::UtcNow
+  $now = $nowValue.ToString("yyyy-MM-ddTHH:mm:ssZ")
+  $firstAppliedAt = $now
+  $applyCount = 0
+  if (Test-Path -LiteralPath $ReceiptFile) {
+    try {
+      $existing = Get-Content -LiteralPath $ReceiptFile -Raw | ConvertFrom-Json
+      if (-not [string]::IsNullOrWhiteSpace([string]$existing.firstAppliedAt)) {
+        try {
+          $parsedFirst = ([DateTimeOffset]$existing.firstAppliedAt).ToUniversalTime()
+          $firstAppliedAt = if ($parsedFirst -le $nowValue) {
+            $parsedFirst.ToString("yyyy-MM-ddTHH:mm:ssZ")
+          } else {
+            $now
+          }
+        } catch {
+          $firstAppliedAt = $now
+        }
+      }
+      if ($null -ne $existing.applyCount) {
+        $applyCount = [int]$existing.applyCount
+      }
+    } catch {
+      # Replace malformed local metadata; no remote data exists.
+    }
+  }
+  $receipt = [ordered]@{
+    schemaVersion = 1
+    firstAppliedAt = $firstAppliedAt
+    lastAppliedAt = $now
+    applyCount = $applyCount + 1
+    installedHosts = @("cursor", "claude", "codex", "agents", "gemini")
+    installerTransmitted = $false
+  }
+  [System.IO.File]::WriteAllText(
+    $ReceiptFile,
+    (($receipt | ConvertTo-Json -Depth 3) + [Environment]::NewLine)
+  )
+  Write-Host "  local install receipt → $ReceiptFile (not transmitted)"
 }
 
 function Install-WeeklySchedule {
@@ -203,6 +252,8 @@ if (-not (Test-Path -LiteralPath $UsageLog)) {
   Write-Host "  kept existing log → $UsageLog"
 }
 
+Update-InstallReceipt
+
 if ($NoOpen) {
   Set-ConfigBool -Key "openDashboardOnApply" -Value $false
 } elseif ($Open) {
@@ -249,6 +300,7 @@ Write-Host "Success: auto-model-router applied."
 Write-Host "  Skills: %USERPROFILE%\.cursor, .claude, .codex, .agents, .gemini (under skills\auto-model-router\)"
 Write-Host "  Dashboard: $Dashboard"
 Write-Host "  Config: $ConfigFile"
+Write-Host "  Adoption: local receipt only; no telemetry was sent."
 if (-not $ShouldOpen) {
   Write-Host "  Skipped opening the browser (-NoOpen or openDashboardOnApply=false)."
   Write-Host "  Open the dashboard path above manually when you want it,"
@@ -268,3 +320,13 @@ if ($cfg.weeklyReview) {
 Write-Host ""
 Write-Host "Note: Cursor/Claude/Gemini loading SKILL.md alone cannot open a GUI."
 Write-Host "      `"Apply`" means running this script so the dashboard auto-starts."
+if ($ShareAdoption) {
+  try {
+    Start-Process $AdoptionUrl
+    Write-Host "  Opened the optional public adoption form. Review it, then submit it yourself."
+  } catch {
+    Write-Host "  Could not open the optional adoption form: $AdoptionUrl"
+  }
+} else {
+  Write-Host "  Optional: re-run with -ShareAdoption to open the public adoption form."
+}

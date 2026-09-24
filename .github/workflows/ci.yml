@@ -21,3 +21,16 @@ jobs:
           python3 -m unittest tests.test_router -v
           python3 scripts/validate-plugins.py
           python3 -m compileall -q demo scripts auto_model_router.py tests
+      - name: Apply is private by default and keeps a local receipt
+        run: |
+          test_home="$(mktemp -d)"
+          HOME="$test_home" ./scripts/apply.sh --no-open
+          HOME="$test_home" ./scripts/apply.sh --no-open
+          python3 - "$test_home/.auto-model-router/install-receipt.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          receipt = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert receipt["applyCount"] == 2
+          assert receipt["installerTransmitted"] is False
+          assert receipt["installedHosts"] == ["cursor", "claude", "codex", "agents", "gemini"]
+          PY
