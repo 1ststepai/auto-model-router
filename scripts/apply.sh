@@ -146,6 +146,10 @@ PY
 install_skill() {
   local dest_dir="$1"
   mkdir -p "$dest_dir"
+  if [[ -f "$dest_dir/SKILL.md" ]] && cmp -s "$SKILL_SRC" "$dest_dir/SKILL.md"; then
+    echo "  skill already current → $dest_dir/SKILL.md"
+    return
+  fi
   cp "$SKILL_SRC" "$dest_dir/SKILL.md"
   echo "  installed skill → $dest_dir/SKILL.md"
 }
@@ -202,6 +206,7 @@ echo "Applying auto-model-router..."
 install_skill "$HOME_DIR/.cursor/skills/auto-model-router"
 install_skill "$HOME_DIR/.claude/skills/auto-model-router"
 install_skill "$HOME_DIR/.codex/skills/auto-model-router"
+install_skill "$HOME_DIR/.agents/skills/auto-model-router"
 install_skill "$HOME_DIR/.gemini/skills/auto-model-router"
 
 # Demo + estimator + sample log under ~/.auto-model-router/demo
@@ -305,7 +310,7 @@ WEEKLY_ON="$(read_config_bool weeklyReview false)"
 
 echo
 echo "Success: auto-model-router applied."
-echo "  Skills: ~/.cursor, ~/.claude, ~/.codex, ~/.gemini (under skills/auto-model-router/)"
+echo "  Skills: ~/.cursor, ~/.claude, ~/.codex, ~/.agents, ~/.gemini (under skills/auto-model-router/)"
 echo "  Dashboard: $DASHBOARD"
 echo "  Config: $CONFIG_FILE"
 if [[ "$SHOULD_OPEN" -eq 0 ]]; then

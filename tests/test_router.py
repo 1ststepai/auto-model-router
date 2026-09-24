@@ -22,10 +22,13 @@ from auto_model_router import (  # noqa: E402
     ingest_user_prompt,
     load_gate,
     load_price_table,
+    post_run_summary,
+    record_outcome,
     route,
     safe_local_path,
     save_gate,
     summarize_usage,
+    summarize_benchmarks,
 )
 from demo.classify import EXAMPLES, LOW_CONFIDENCE, classify, load_tier_map, picker_action  # noqa: E402
 
@@ -422,6 +425,80 @@ class RouteTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["gate"], "auto_continue")
         self.assertFalse(result["needs_confirm"])
+        self.assertEqual(result["classification_source"], "heuristic")
+        self.assertGreaterEqual(result["classification_ms"], 0)
+
+    def test_custom_classifier_cannot_weaken_high_risk_gate(self) -> None:
+        result = route(
+            "Rotate the production API key and deploy it",
+            classifier=lambda _task: {
+                "tier": "fast",
+                "confidence": 0.99,
+                "reason": "external classifier predicted a simple task",
+            },
+        )
+        self.assertEqual(result["tier"], "reasoning")
+        self.assertEqual(result["gate"], "hard_gate")
+        self.assertFalse(result["allowed"])
+        self.assertIn("custom:", result["classification_source"])
+        self.assertIn("high-risk floor enforced", result["signals"])
+
+    def test_custom_classifier_failure_uses_safe_fallback(self) -> None:
+        def broken(_task: str) -> dict:
+            raise RuntimeError("offline model unavailable")
+
+        result = route("Rename foo to bar in utils.py", classifier=broken)
+        self.assertEqual(result["tier"], "fast")
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["classification_source"], "heuristic_fallback")
+
+
+class OutcomeTests(unittest.TestCase):
+    def test_post_run_summary_requires_real_pricing_for_savings(self) -> None:
+        unpriced = post_run_summary(
+            {"tier": "fast", "input_tokens": 1000, "output_tokens": 100},
+            baseline_tier="reasoning",
+        )
+        self.assertIsNone(unpriced["actual_cost_usd"])
+        self.assertIsNone(unpriced["estimated_savings_usd"])
+
+        table = {
+            "tiers": {
+                "fast": {"input_per_million": 1.0, "output_per_million": 2.0},
+                "reasoning": {"input_per_million": 5.0, "output_per_million": 10.0},
+            }
+        }
+        priced = post_run_summary(
+            {"tier": "fast", "input_tokens": 1_000_000, "output_tokens": 1_000_000},
+            baseline_tier="reasoning",
+            price_table=table,
+        )
+        self.assertEqual(priced["actual_cost_usd"], 3.0)
+        self.assertEqual(priced["estimated_baseline_cost_usd"], 15.0)
+        self.assertEqual(priced["estimated_savings_usd"], 12.0)
+        self.assertFalse(priced["billing_api_accessed"])
+
+    def test_outcome_log_is_privacy_safe_and_benchmarkable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "usage.jsonl"
+            routed = route("Rename secret_customer_name to display_name", confirmed=False)
+            for _ in range(2):
+                record_outcome(
+                    path,
+                    routed,
+                    usage={"input_tokens": 50, "output_tokens": 5, "cost_usd": 0.001},
+                    success=True,
+                    latency_ms=12.5,
+                    quality_score=0.9,
+                    task_kind="rename",
+                )
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("secret_customer_name", text)
+            rows = [json.loads(line) for line in text.splitlines()]
+            report = summarize_benchmarks(rows, min_samples=2)
+            self.assertTrue(report["groups"][0]["eligible_for_advisory"])
+            self.assertEqual(report["groups"][0]["success_rate"], 1.0)
+            self.assertFalse(report["auto_routing_changed"])
 
 
 class DetectActiveTests(unittest.TestCase):

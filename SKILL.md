@@ -197,6 +197,22 @@ if not result["allowed"]:
     ...
 ```
 
+### Optional adaptive classifier and outcome evidence
+
+The Python library accepts a local `classifier=` callable that returns `tier`,
+`confidence`, and `reason`. It may wrap ONNX, embeddings, or benchmark-aware
+logic. The built-in heuristic remains the safety envelope: custom output cannot
+weaken a hard gate, auto-continue a boundary case, or under-provision recognized
+high-risk work. Invalid output or classifier failure falls back to the heuristic.
+
+Every result includes `classification_source` and `classification_ms`; do not
+promise a universal latency target. After a run, `record_outcome` may store a
+non-sensitive task-kind slug, success, latency, quality, tokens, and reported
+cost without storing prompt text. `post_run_summary` reports actual or locally
+priced cost and only calculates a baseline difference when both sides are
+priceable. `summarize_benchmarks` is advisory and never changes routing itself.
+See [`docs/adaptive-routing.md`](docs/adaptive-routing.md).
+
 `usage=` (tokens / `cost_usd`) is optional. Omit it rather than inventing numbers.
 
 ## On apply / first use

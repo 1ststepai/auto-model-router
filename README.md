@@ -20,6 +20,8 @@ The repository contains a portable skill, small offline heuristic demo, integrat
 - **Hard-block spendy tools (opt-in hook).** Copy [`hooks/cursor.hooks.json`](hooks/cursor.hooks.json) (or the Claude/Codex/Gemini snippet). `scripts/confirm_gate.py` denies tool calls until the user confirms. Tool `confirmed: true` does not unlock the gate.
 - **Confidence.** Vague low-confidence prompts stay on `standard` — the classifier will not guess `max`.
 - **Honest usage log.** When `usage.jsonl` has `input_tokens` / `output_tokens` / `cost_usd`, the estimator and dashboard use those figures. Tier-only rows stay labeled relative units. No vendor billing API.
+- **Pluggable adaptive classifier.** Hosts can supply a local ONNX, embedding, or benchmark-aware classifier while the built-in heuristic keeps hard gates, boundary checks, and a fail-safe fallback. Classification latency is measured; no universal sub-10ms claim is made. See [`docs/adaptive-routing.md`](docs/adaptive-routing.md).
+- **Post-run evidence, not invented savings.** Privacy-safe outcomes can record success, latency, quality, tokens, and reported cost. Per-run comparisons appear only when both the actual run and declared baseline can be priced.
 - **Gemini is a first-class host.** Same portable skill for Gemini CLI, Google AI Studio, and Antigravity. Install is skill copy (`gemini skills install --path` is still a path copy, not a Google marketplace). Flash → `fast`, Pro → `standard` / `reasoning`, thinking/deep → `max`; hosts rename locally. Same suggest → confirm → run gate.
 - **Grok is supported without pretending local and cloud installs are the same.** Grok Build can load the portable skill from `.agents/skills` or a local plugin. [`GROK-BOT.md`](GROK-BOT.md) is the reviewed handoff for an account-level Grok Bot private skill; saving it in the Bot account remains a separate user-controlled action.
 - The [live Codex demo](#live-demo) below is a recorded session from before auto-continue; that pass waited on a rename. Current policy would print `Auto continues on fast` for that same clear rename unless you ask it to wait.
@@ -121,7 +123,7 @@ Plugin install does not open the savings dashboard. Use the apply script for tha
 .\scripts\apply.ps1 -Open
 ```
 
-This copies the skill into user skills dirs (Cursor, Claude, Codex, Gemini), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
+This copies the skill into user skills dirs (Cursor, Claude, Codex, shared `.agents` discovery for compatible hosts such as Grok Build, and Gemini), installs the demo under `~/.auto-model-router/demo`, and by default opens the savings dashboard. Pass `--no-open` / `-NoOpen` to skip the browser; `--open` / `-Open` forces open. Choices are saved in `~/.auto-model-router/config.json` (Windows: `%USERPROFILE%\.auto-model-router\config.json`) as `{ "openDashboardOnApply": true, "weeklyReview": false }`.
 
 **Optional weekly review** (local usage log only — not vendor billing):
 
@@ -171,6 +173,12 @@ Auto suggests **standard** — Multi-file edits, known patterns, or moderate deb
 --- JSON ---
 {"tier": "standard", "reason": "Multi-file edits, known patterns, or moderate debugging with decent clues; mid tier sufficient.", "signals": ["known patterns"], "confidence": 0.7, "needs_confirm": true, "downshifted_from": null, "reversible": true, "high_risk": false, "near_boundary": false, "gate": "confirm", "gate_reason": "spendy tier requires explicit confirm before tools run"}
 ```
+
+Applications that need more routing intelligence can pass a local classifier to
+`route(..., classifier=...)`. The adapter returns a tier, confidence, and reason;
+the built-in safety envelope still controls high-risk floors and confirmation.
+See [`docs/adaptive-routing.md`](docs/adaptive-routing.md) for the contract and
+benchmark/outcome APIs.
 
 ## Savings estimator
 

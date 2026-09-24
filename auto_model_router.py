@@ -13,9 +13,10 @@ import os
 import re
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -38,9 +39,72 @@ _OVERRIDE_RE = re.compile(
 )
 
 
-def classify_task(task: str) -> dict:
-    """Classify with confidence, gate, and low-confidence downshift."""
-    return classify(task)
+Classifier = Callable[[str], Mapping[str, Any]]
+
+
+def classify_task(task: str, classifier: Optional[Classifier] = None) -> dict:
+    """Classify locally, with an optional pluggable classifier and safe fallback.
+
+    A custom classifier may improve tier prediction, including an ONNX or embedding
+    model owned by the host. The built-in heuristic remains the safety envelope:
+    custom output cannot weaken a hard gate, auto-continue a boundary case, or
+    under-provision a task the heuristic recognizes as high risk.
+    """
+    started = time.perf_counter()
+    base = dict(classify(task))
+    base["classification_source"] = "heuristic"
+    if classifier is None:
+        base["classification_ms"] = round((time.perf_counter() - started) * 1000, 3)
+        return base
+
+    source = getattr(classifier, "__name__", classifier.__class__.__name__)
+    try:
+        proposed = dict(classifier(task))
+        proposed_tier = _tier(proposed.get("tier"), "classifier")
+        confidence = _num(proposed.get("confidence"))
+        if confidence is None or not 0 <= confidence <= 1:
+            raise ValueError("classifier confidence must be between 0 and 1")
+
+        chosen = proposed_tier
+        safety_notes: List[str] = []
+        if base.get("high_risk") and TIERS.index(chosen) < TIERS.index("reasoning"):
+            chosen = "reasoning"
+            safety_notes.append("high-risk floor enforced")
+
+        if base.get("gate") == "hard_gate":
+            gate = "hard_gate"
+            gate_reason = base.get("gate_reason")
+        elif chosen in SPENDY_TIERS:
+            gate = "confirm"
+            gate_reason = "spendy tier requires explicit confirm before tools run"
+        elif base.get("gate") == "auto_continue" and not base.get("near_boundary"):
+            gate = "auto_continue"
+            gate_reason = "custom classifier chose fast inside the heuristic safety envelope"
+        else:
+            gate = "confirm"
+            gate_reason = "custom fast result did not satisfy the heuristic auto-continue envelope"
+
+        result = dict(base)
+        result.update(
+            tier=chosen,
+            reason=str(proposed.get("reason") or f"{source} selected {proposed_tier}."),
+            confidence=confidence,
+            gate=gate,
+            gate_reason=gate_reason,
+            needs_confirm=gate != "auto_continue",
+            classification_source=f"custom:{source}",
+        )
+        result["signals"] = list(base.get("signals") or []) + [
+            f"custom classifier proposed {proposed_tier}",
+            *safety_notes,
+        ]
+    except Exception as exc:  # A classifier outage must fail safely and locally.
+        result = dict(base)
+        result["classification_source"] = "heuristic_fallback"
+        result["classifier_error"] = exc.__class__.__name__
+
+    result["classification_ms"] = round((time.perf_counter() - started) * 1000, 3)
+    return result
 
 
 def _checked_local(raw: os.PathLike[str] | str) -> str:
@@ -294,6 +358,7 @@ def route(
     log_path: Optional[os.PathLike[str] | str] = None,
     usage: Optional[Mapping[str, Any]] = None,
     state_path: Optional[os.PathLike[str] | str] = None,
+    classifier: Optional[Classifier] = None,
 ) -> Dict[str, Any]:
     """Classify, gate, and optionally append one usage.jsonl row.
 
@@ -302,7 +367,7 @@ def route(
     Auto-continue (clear reversible fast) is allowed without ``confirmed``.
     Nothing is logged when the gate blocks the run.
     """
-    classified = classify_task(task)
+    classified = classify_task(task, classifier=classifier)
     suggested = classified["tier"]
     if override is not None:
         chosen = _tier(override, "override")
@@ -327,8 +392,12 @@ def route(
         "downshifted_from": classified.get("downshifted_from"),
         "gate": classified.get("gate"),
         "signals": classified.get("signals"),
+        "classification_source": classified.get("classification_source"),
+        "classification_ms": classified.get("classification_ms"),
         "allowed": decision["allowed"],
+        "confirmed": user_confirmed or classified.get("gate") == "auto_continue",
         "overridden": overridden,
+        "host": host,
         "suggestion": suggest_line(task, {**classified, "tier": chosen}),
         "logged": False,
     }
@@ -357,6 +426,8 @@ def route(
                 gate=classified.get("gate"),
                 host=host,
                 usage=usage,
+                classification_source=classified.get("classification_source"),
+                classification_ms=classified.get("classification_ms"),
             ),
         )
         record["logged"] = True
@@ -373,6 +444,8 @@ def _usage_record(
     gate: Optional[str],
     host: Optional[str],
     usage: Optional[Mapping[str, Any]],
+    classification_source: Optional[str] = None,
+    classification_ms: Optional[float] = None,
 ) -> Dict[str, Any]:
     record: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -386,6 +459,10 @@ def _usage_record(
         record["gate"] = gate
     if host:
         record["host"] = host
+    if classification_source:
+        record["classification_source"] = classification_source
+    if classification_ms is not None:
+        record["classification_ms"] = classification_ms
     if usage:
         for key in USAGE_FIELDS:
             if key in usage and usage[key] is not None:
@@ -402,6 +479,49 @@ def append_usage(path: os.PathLike[str] | str, record: Mapping[str, Any]) -> Pat
         append=True,
     )
     return Path(resolved)
+
+
+def record_outcome(
+    path: os.PathLike[str] | str,
+    route_record: Mapping[str, Any],
+    *,
+    usage: Optional[Mapping[str, Any]] = None,
+    success: Optional[bool] = None,
+    latency_ms: Optional[float] = None,
+    quality_score: Optional[float] = None,
+    task_kind: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Append a privacy-safe post-run outcome without storing task or prompt text."""
+    tier = _tier(route_record.get("tier"), "outcome")
+    record = _usage_record(
+        tier=tier,
+        confirmed=route_record.get("confirmed") is True,
+        overridden=route_record.get("overridden") is True,
+        suggested_tier=str(route_record.get("suggested_tier") or tier),
+        confidence=float(route_record.get("confidence") or 0),
+        gate=str(route_record.get("gate") or "confirm"),
+        host=str(route_record.get("host") or "") or None,
+        usage=usage,
+        classification_source=str(route_record.get("classification_source") or "") or None,
+        classification_ms=_num(route_record.get("classification_ms")),
+    )
+    if success is not None:
+        record["success"] = success is True
+    latency = _num(latency_ms)
+    if latency is not None and latency >= 0:
+        record["latency_ms"] = latency
+    quality = _num(quality_score)
+    if quality is not None:
+        if not 0 <= quality <= 1:
+            raise ValueError("quality_score must be between 0 and 1")
+        record["quality_score"] = quality
+    if task_kind:
+        kind = str(task_kind).strip()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", kind):
+            raise ValueError("task_kind must be a non-sensitive slug")
+        record["task_kind"] = kind
+    append_usage(path, record)
+    return record
 
 
 def load_price_table(path: Optional[os.PathLike[str] | str]) -> Optional[Dict[str, Any]]:
@@ -601,6 +721,118 @@ def summarize_usage(
     }
 
 
+def post_run_summary(
+    entry: Mapping[str, Any],
+    *,
+    baseline_tier: Optional[str] = None,
+    price_table: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Compare one run with a declared baseline using measured or locally priced data.
+
+    Savings stay unavailable unless both the actual run and baseline can be priced.
+    """
+    tier = _tier(entry.get("tier"), "post_run_summary")
+    baseline = _tier(baseline_tier, "baseline_tier") if baseline_tier else None
+    logged = _num(entry.get("cost_usd"))
+    actual = logged if logged is not None else _token_cost(entry, price_table, tier)
+    estimated_baseline = _token_cost(entry, price_table, baseline) if baseline else None
+    savings = None
+    savings_pct = None
+    if actual is not None and estimated_baseline is not None:
+        savings = estimated_baseline - actual
+        savings_pct = _pct(estimated_baseline, actual)
+
+    actual_text = "actual cost unavailable"
+    if actual is not None:
+        label = "reported" if logged is not None else "locally priced"
+        actual_text = f"{label} cost ${actual:.6f}"
+    baseline_text = "no priced baseline"
+    if baseline and estimated_baseline is not None:
+        baseline_text = f"estimated {baseline} baseline ${estimated_baseline:.6f}"
+    message = f"Routed to {tier}; {actual_text}; {baseline_text}."
+    if savings is not None:
+        message = message[:-1] + f"; estimated difference ${savings:.6f} ({savings_pct:.1f}%)."
+
+    return {
+        "tier": tier,
+        "baseline_tier": baseline,
+        "actual_cost_usd": round(actual, 6) if actual is not None else None,
+        "actual_basis": "reported_cost_usd" if logged is not None else (
+            "local_price_table" if actual is not None else "unavailable"
+        ),
+        "estimated_baseline_cost_usd": round(estimated_baseline, 6)
+        if estimated_baseline is not None
+        else None,
+        "estimated_savings_usd": round(savings, 6) if savings is not None else None,
+        "estimated_savings_pct": savings_pct,
+        "billing_api_accessed": False,
+        "message": message,
+    }
+
+
+def summarize_benchmarks(
+    entries: Iterable[Mapping[str, Any]],
+    *,
+    min_samples: int = 5,
+) -> Dict[str, Any]:
+    """Aggregate opt-in outcome rows for a classifier adapter to consume.
+
+    This report never changes routing by itself. A custom classifier can use
+    sufficiently sampled groups while the safety envelope and confirm gates remain.
+    """
+    if min_samples < 1:
+        raise ValueError("min_samples must be at least 1")
+    groups: Dict[tuple[str, str], Dict[str, Any]] = {}
+    ignored = 0
+    for entry in entries:
+        kind = str(entry.get("task_kind") or "").strip()
+        tier = str(entry.get("tier") or "").strip().lower()
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", kind) or tier not in TIERS:
+            ignored += 1
+            continue
+        group = groups.setdefault(
+            (kind, tier),
+            {"task_kind": kind, "tier": tier, "samples": 0, "successes": 0,
+             "latencies": [], "quality": [], "costs": []},
+        )
+        group["samples"] += 1
+        if entry.get("success") is True:
+            group["successes"] += 1
+        for field, bucket in (
+            ("latency_ms", "latencies"),
+            ("quality_score", "quality"),
+            ("cost_usd", "costs"),
+        ):
+            value = _num(entry.get(field))
+            if value is not None:
+                group[bucket].append(value)
+
+    rows: List[Dict[str, Any]] = []
+    for group in groups.values():
+        samples = group["samples"]
+        row = {
+            "task_kind": group["task_kind"],
+            "tier": group["tier"],
+            "samples": samples,
+            "eligible_for_advisory": samples >= min_samples,
+            "success_rate": round(group["successes"] / samples, 4),
+            "avg_latency_ms": round(sum(group["latencies"]) / len(group["latencies"]), 3)
+            if group["latencies"] else None,
+            "avg_quality_score": round(sum(group["quality"]) / len(group["quality"]), 4)
+            if group["quality"] else None,
+            "avg_cost_usd": round(sum(group["costs"]) / len(group["costs"]), 6)
+            if group["costs"] else None,
+        }
+        rows.append(row)
+    rows.sort(key=lambda row: (row["task_kind"], TIERS.index(row["tier"])))
+    return {
+        "min_samples": min_samples,
+        "groups": rows,
+        "ignored_rows": ignored,
+        "auto_routing_changed": False,
+    }
+
+
 def _pct(baseline: float, value: float) -> float:
     if baseline <= 0:
         return 0.0
@@ -619,8 +851,11 @@ __all__ = [
     "ingest_user_prompt",
     "load_gate",
     "load_price_table",
+    "post_run_summary",
+    "record_outcome",
     "record_confirmation",
     "route",
     "save_gate",
     "summarize_usage",
+    "summarize_benchmarks",
 ]
