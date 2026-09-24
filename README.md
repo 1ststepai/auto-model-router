@@ -6,7 +6,7 @@
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md) [![Python demo](https://img.shields.io/badge/demo-Python%203-3776AB.svg?logo=python&logoColor=white)](demo/classify.py)
 
-**A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, Gemini, or any agent with custom instructions or skills**—without requiring vendor-specific model names or APIs.
+**A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.** It is for developers and teams using **Cursor, Claude Code, Codex, Gemini, Grok Build, Grok Bot, or any agent with custom instructions or skills**. Provider recommendations name a concrete checked model and effort only when the host exposes a verified mapping; live host inventory and project overrides take precedence.
 
 An open-source, provider-agnostic skill for routing coding-agent work to the lightest model or effort tier that can do it well. Product page: [1stStep Auto Model Router](https://www.1ststep.ai/tools/auto-model-router/).
 
@@ -21,6 +21,7 @@ The repository contains a portable skill, small offline heuristic demo, integrat
 - **Confidence.** Vague low-confidence prompts stay on `standard` — the classifier will not guess `max`.
 - **Honest usage log.** When `usage.jsonl` has `input_tokens` / `output_tokens` / `cost_usd`, the estimator and dashboard use those figures. Tier-only rows stay labeled relative units. No vendor billing API.
 - **Gemini is a first-class host.** Same portable skill for Gemini CLI, Google AI Studio, and Antigravity. Install is skill copy (`gemini skills install --path` is still a path copy, not a Google marketplace). Flash → `fast`, Pro → `standard` / `reasoning`, thinking/deep → `max`; hosts rename locally. Same suggest → confirm → run gate.
+- **Grok is supported without pretending local and cloud installs are the same.** Grok Build can load the portable skill from `.agents/skills` or a local plugin. [`GROK-BOT.md`](GROK-BOT.md) is the reviewed handoff for an account-level Grok Bot private skill; saving it in the Bot account remains a separate user-controlled action.
 - The [live Codex demo](#live-demo) below is a recorded session from before auto-continue; that pass waited on a rename. Current policy would print `Auto continues on fast` for that same clear rename unless you ask it to wait.
 
 ## Live demo
@@ -79,9 +80,9 @@ Auto suggests <tier> — <reason>. Confirm to run, or override: fast / standard 
 
 ## Install
 
-**Start with the complete [installation guide](INSTALL.md).** It covers plugin installs, project and user-wide skill copies, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, Gemini, generic agents, cloud/background agents, and verification.
+**Start with the complete [installation guide](INSTALL.md).** It covers plugin installs, project and user-wide skill copies, Windows and macOS/Linux paths, Cursor, Claude Code, Codex, Gemini, Grok, generic agents, cloud/background agents, and verification.
 
-The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery. Plugin manifests for Cursor, Claude Code, and Codex all point at that skill — they do not ship a second policy. Gemini has no plugin catalog in this repo; copy the skill.
+The canonical skill is [`skills/auto-model-router/SKILL.md`](skills/auto-model-router/SKILL.md). The root [`SKILL.md`](SKILL.md) contains the same body for easy discovery. Runtime manifests and context gateways point at that skill — they do not ship a second policy. Gemini and Grok Build can use the shared Agent Skills layout; Grok Bot uses the account-level handoff in [`GROK-BOT.md`](GROK-BOT.md).
 
 Installing the plugin (or Gemini skill copy) loads the boundary-gated suggest → confirm skill. It does **not** change vendor billing APIs or guarantee savings. GitHub plugin install works for Cursor, Claude Code, and Codex; official Cursor Marketplace and Anthropic catalog listings are pending. There is no official Google plugin catalog — do not treat `gemini skills install` as one.
 
@@ -190,6 +191,7 @@ This is not live billing: coding-agent GUIs do not expose a reliable third-party
 - [Claude Code](integrations/CLAUDE.md) (project/personal skills or `CLAUDE.md`)
 - [Codex](integrations/CODEX.md) (`AGENTS.md` and supported Agent Skills)
 - [Gemini](integrations/GEMINI.md) (Gemini CLI skills / `GEMINI.md`, Google AI Studio, Antigravity — skill copy, not a Google marketplace)
+- [Grok portability](PORTABILITY.md) (Grok Build Agent Skills/local plugin discovery and a separate Grok Bot private-skill handoff)
 - Any agent with custom instructions or a skills directory
 
 Cloud/background agents should use the committed project copy, not only a local user-home skill.
@@ -285,6 +287,10 @@ plugin.json                           # Agent Plugins 1.0 portable manifest
 .claude-plugin/marketplace.json       # Claude Code marketplace
 .codex-plugin/plugin.json             # Codex compatibility overlay
 .agents/plugins/marketplace.json      # Codex repo marketplace
+gemini-extension.json                 # Gemini extension metadata
+GEMINI.md                             # Gemini context gateway
+GROK-BOT.md                           # Grok Bot private-skill handoff
+PORTABILITY.md                        # Runtime portability contract
 assets/logo.png                       # square plugin / marketplace tile
 assets/logo-512.png                   # same 512×512 tile
 assets/auto-model-router-logo.png     # original neon upload

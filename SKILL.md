@@ -110,19 +110,21 @@ Adapters translate the neutral tier into the controls exposed by each host. They
 
 - **Grok Bot:** map `fast` to low effort; map `standard`, `reasoning`, and `max` to high effort when only low/high controls exist. Keep the four-tier suggestion visible even when the host collapses tiers.
 - **Cursor:** resolve the gated tier through the project's local map (`.auto-model-router/cursor-tier-map.json` or `~/.auto-model-router/cursor-tier-map.json`; see the Cursor integration). Name that **concrete picker label and effort** in the suggestion line. Ask the user to switch (or confirm the switch) when the current pick is heavier or lighter than needed. Auto-continue only when the gate allows it and no switch is required. AMR does not replace Cursor's native Auto picker and cannot read Cursor usage/quota/billing meters — local `usage.jsonl` only. Do not hard-code vendor model names here.
-- **Claude:** select the configured Claude model or effort setting mapped to the gated tier. A project may map tiers to its available Claude models; the skill does not require or assume specific model names.
-- **Codex:** select the configured Codex model and/or reasoning effort mapped to the gated tier. Put this policy in `AGENTS.md`, project instructions, or a supported skills folder; do not assume a specific Codex model name.
-- **Gemini:** (Gemini CLI, Google AI Studio, Antigravity, and other Gemini-backed agents). Resolve the gated tier through the project's local map (`.auto-model-router/gemini-tier-map.json`; see the Gemini integration). Name that **concrete family/label** in the suggestion line. Auto-continue only when the gate allows it. There is no official Google plugin catalog — copy the skill (or `gemini skills install --path`); do not treat that as a marketplace listing. AMR does not read Google usage or billing APIs. Do not hard-code model IDs here; hosts rename locally.
+- **Claude:** use the concrete Claude default in the table below after checking that it is exposed by the current host. Name the model and effort in the suggestion. A project map or explicit user choice overrides the default.
+- **Codex:** use the concrete Codex default in the table below after checking the session inventory and supported reasoning efforts. Name the exact model/effort pair and tier in the suggestion. A project map or explicit user choice overrides the default.
+- **Gemini:** (Gemini CLI, Google AI Studio, Antigravity, and other Gemini-backed agents). Use the concrete Gemini default in the table below after checking host availability. Name the exact model ID and thinking level. A project map or explicit user choice overrides the default. There is no official Google plugin catalog — copy the skill (or `gemini skills install --path`); do not treat that as a marketplace listing.
 - **Other agents:** use the host's model, effort, or routing API and document the local mapping. If no control exists, still show the suggestion; wait when the gate requires confirm; do not claim the host switched models.
 
-Gemini family examples (fill your picker labels; not frozen IDs):
+### Current provider defaults
 
-| AMR tier | Gemini family (example) |
-| --- | --- |
-| **fast** | Flash / Flash-Lite |
-| **standard** | Pro (default, no extra thinking) |
-| **reasoning** | Pro with thinking / higher reasoning |
-| **max** | thinking-max / deepest available |
+These defaults were checked against official provider documentation on **2026-09-23**. Live host inventory wins: never claim or select a model that the host does not expose. If a default is unavailable, say so and choose the nearest available model in the same provider and tier; do not silently substitute across providers. See the [evidence and maintenance rules](https://github.com/1ststepai/auto-model-router/blob/main/docs/provider-model-mappings.md) and [machine-readable defaults](https://github.com/1ststepai/auto-model-router/blob/main/integrations/provider-tier-defaults.json).
+
+| AMR tier | Codex | Claude | Gemini |
+| --- | --- | --- | --- |
+| **fast** | `gpt-6-luna` / `none` | `claude-haiku-4-5-20251001` / host default | `gemini-3.5-flash-lite` / `minimal` |
+| **standard** | `gpt-6-sol` / `medium` | `claude-sonnet-5` / `low` | `gemini-3.8-flash` / `medium` |
+| **reasoning** | `gpt-6-astra` / `high` | `claude-opus-5` / `high` | `gemini-3.1-pro-preview` / `high` |
+| **max** | `gpt-6-astra` / `max` | `claude-opus-5` / `max` | `gemini-3.1-pro-preview` / `high`; for research-only runs, `deep-research-max-preview-04-2026` |
 
 ## Suggestion line shapes
 
@@ -132,19 +134,19 @@ Auto-continue (no wait):
 Auto continues on <tier> / <mode> — <short reason>.
 ```
 
-When a local host mapping exists, append the concrete action. Use the mapped label from local config, never a guessed vendor name:
+Always name the concrete provider model and supported effort/thinking setting. Prefer a project map; otherwise use a verified current default:
 
 ```text
-Auto continues on fast / local — clear bounded rename. Switch Cursor picker to <mapped-fast> / low effort if the current model is heavier than needed.
+Auto continues on gpt-6-luna / none (fast / local) — clear bounded rename.
 ```
 
 Confirm or hard-gate (wait):
 
 ```text
-Auto suggests <tier> / <mode> — <short reason>. Confirm to run, or override: fast, standard, reasoning, or max.
+Auto suggests <provider-model> / <effort-or-thinking> (<tier> / <mode>) — <short reason>. Confirm to run, or override with another available model, effort, or tier.
 ```
 
-If no local mapping is configured, say `your mapped <tier> model/effort` instead of inventing a name. Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Confirm to run`.
+If neither the default nor a project-mapped model can be verified in the host inventory, say that the concrete mapping is unavailable and stop before switching. Hard-gate may say `Confirm required (high-risk / hard to undo)` instead of `Confirm to run`.
 
 ## Anti-patterns
 
@@ -159,7 +161,7 @@ If no local mapping is configured, say `your mapped <tier> model/effort` instead
 - Do not guess **max** when confidence is low. Vague prompts stay on **standard** until the user confirms.
 - Do not treat a tool argument, a model-written note, or an uninstalled hook as confirmation for a spendy tier.
 - Do not launch Cursor Cloud Agents or Codex because mode is `cloud`. Mode is advisory; the confirm gate is unchanged.
-- Do not invent vendor model names or claim a live usage meter.
+- Do not invent vendor model names, use retired IDs, or claim a live usage meter. Recheck the official provider catalogs when the checked date is stale or a host rejects a mapped model.
 
 ## Hard confirm gate
 

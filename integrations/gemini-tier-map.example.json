@@ -1,19 +1,20 @@
 {
-  "comment": "Local Gemini adapter example — replace placeholders with labels from YOUR Gemini CLI / AI Studio picker. Families, not frozen model IDs. Do not commit vendor marketing names into the portable skill. AMR does not read Google billing APIs.",
+  "comment": "Defaults checked 2026-09-23. Replace them when YOUR Gemini CLI / AI Studio inventory differs. AMR does not read Google billing APIs.",
   "fast": {
-    "model": "<your-flash-or-flash-lite>",
-    "family": "Flash"
+    "model": "gemini-3.5-flash-lite",
+    "thinking_level": "minimal"
   },
   "standard": {
-    "model": "<your-pro-default>",
-    "family": "Pro"
+    "model": "gemini-3.8-flash",
+    "thinking_level": "medium"
   },
   "reasoning": {
-    "model": "<your-pro-thinking>",
-    "family": "Pro thinking"
+    "model": "gemini-3.1-pro-preview",
+    "thinking_level": "high"
   },
   "max": {
-    "model": "<your-deep-or-strongest>",
-    "family": "thinking / deep"
+    "model": "gemini-3.1-pro-preview",
+    "thinking_level": "high",
+    "research_only_alternative": "deep-research-max-preview-04-2026"
   }
 }

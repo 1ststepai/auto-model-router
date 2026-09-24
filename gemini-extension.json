@@ -1,0 +1,6 @@
+{
+  "name": "auto-model-router",
+  "version": "1.1.0",
+  "description": "A transparent, boundary-gated policy that routes each coding-agent task to the lightest sufficient model or effort tier.",
+  "contextFileName": "GEMINI.md"
+}

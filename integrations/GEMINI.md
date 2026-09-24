@@ -49,18 +49,18 @@ high-risk work.
 
 AI Studio, Antigravity, and similar UIs do not load a Google plugin marketplace from this repo. If the host reads `.gemini/skills/` or `GEMINI.md`, use the copy/include above. Otherwise paste the skill (or the include) into custom / system instructions, then pick the mapped model in the UI **after** the gate. That is still suggest → gate → run. It is not a silent model switch, not a billing integration, and not an official Google catalog listing.
 
-## Capability map (families, not frozen IDs)
+## Current model map
 
-Copy [`gemini-tier-map.example.json`](gemini-tier-map.example.json) to `.auto-model-router/gemini-tier-map.json` or `~/.auto-model-router/gemini-tier-map.json` and fill in **your** picker labels. Google renames models; the skill must not hard-code IDs.
+Copy [`gemini-tier-map.example.json`](gemini-tier-map.example.json) to `.auto-model-router/gemini-tier-map.json` or `~/.auto-model-router/gemini-tier-map.json` to override the checked-in defaults with models exposed by your host.
 
 | AMR tier | Gemini family (example) | Typical use |
 | --- | --- | --- |
-| **fast** | Flash / Flash-Lite | Clear, reversible, low-judgment work |
-| **standard** | Pro (default, no extra thinking) | Multi-file routine features — **still confirms** |
-| **reasoning** | Pro with thinking / higher reasoning | Ambiguous, architecture, security (hard-gate when high-risk) |
-| **max** | Deep / thinking-max / strongest available | Research-level or large ambiguous redesigns |
+| **fast** | `gemini-3.5-flash-lite` / `minimal` | Clear, reversible, low-judgment work |
+| **standard** | `gemini-3.8-flash` / `medium` | Multi-file routine features — **still confirms** |
+| **reasoning** | `gemini-3.1-pro-preview` / `high` | Ambiguous, architecture, security (hard-gate when high-risk) |
+| **max** | `gemini-3.1-pro-preview` / `high`; research-only: `deep-research-max-preview-04-2026` | Research-level or large ambiguous redesigns |
 
-Hosts rename locally. A project may map two AMR tiers onto the same Gemini model and still show the four-tier suggestion.
+The general-purpose reasoning and max tiers share the Pro model because `high` is its deepest supported thinking level. Use Deep Research Max only for research. Live host inventory wins, and preview status must remain visible.
 
 Preview:
 
